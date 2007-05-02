@@ -140,7 +140,7 @@ def import_to_delicious(bookmarks):
         print "Tag: ", tag 
         print "Updated date: ", dt
         print ""
-        delicious_add(_delicious_username, _delicious_password, url, description, tag, "", dt)
+        delicious_add(_delicious_username, _delicious_password, url, title, tag)
 
     print "Imported %d bookmarks" %len(bookmarks.entries)
 
