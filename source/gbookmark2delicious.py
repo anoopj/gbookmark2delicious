@@ -53,6 +53,13 @@ def camel_case(string):
     """
     return "".join(map(lambda x: x.title(), string.split()))
 
+def underscorify(string):
+    """
+    Strip the spaces in a string and under_scorify it - del.icio.us tags cannot have spaces, but
+    Google bookmark labels can have.
+    """
+    return "-".join(string.lower().split())
+
 def grab_goog_bookmarks(username, password):
     """
     Grab the Google bookmarks as an RSS feed.
@@ -95,7 +102,7 @@ def grab_goog_bookmarks(username, password):
     scheme = matchobj.group(1)
     realm = matchobj.group(2)
     if scheme.lower() != 'basic':
-        print 'This example only works with BASIC authentication.'
+        print 'Supports only BASIC authentication.'
         sys.exit(1)
 
     base64string = base64.encodestring('%s:%s' % (username, password))[:-1]
@@ -120,17 +127,18 @@ def parse_feed(feed):
 def delicious_add(user, password, url, description, tags="", extended="", dt="", replace="no"):
     pydelicious.add(user, password, url, description, tags, extended, dt, replace)
 
-def import_to_delicious(bookmarks):
+def import_to_delicious(bookmarks, username, password):
     """
     Input is a dictionary which contains all the Google bookmarks.
     """
-    print "Importing bookmarks...\n"
+    print "<b>Importing %d bookmarks</b>" %len(bookmarks.entries)
+    print "<br/><br/>"
     for bookmark in bookmarks.entries:
         title = get_value_from_dict(bookmark, "title")
         url = get_value_from_dict(bookmark, "link")
         description = get_value_from_dict(bookmark, "bkmk_annotation")
         label = get_value_from_dict(bookmark, "bkmk_label")
-        tag = camel_case(label)
+        tag = underscorify(label)
         dt = get_value_from_dict(bookmark, "date")
 
         print "Title: ", title.encode("ascii", "ignore")
@@ -139,10 +147,9 @@ def import_to_delicious(bookmarks):
         print "Label: ", label
         print "Tag: ", tag 
         print "Updated date: ", dt
-        print ""
-        delicious_add(_delicious_username, _delicious_password, url, title, tag)
+        print "<br/><br/>"
+        delicious_add(username, password, url, title, tag)
 
-    print "Imported %d bookmarks" %len(bookmarks.entries)
 
 def get_value_from_dict(dict, key):
     try:
@@ -153,7 +160,7 @@ def get_value_from_dict(dict, key):
 def main():
     process_args(sys.argv[1:])
     feed = grab_goog_bookmarks(_goog_username, _goog_password)
-    import_to_delicious(parse_feed(feed))
+    import_to_delicious(parse_feed(feed), _delicious_username, _delicious_password)
 
 if __name__ == "__main__":
     main()
