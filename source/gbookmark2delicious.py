@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+from __future__ import with_statement
+
 import base64
 import feedparser
 import getopt
@@ -10,8 +12,13 @@ import sys
 from urlparse import urlparse
 import urllib2
 from cPickle import *
+from functools import *
+from commons.decs import *
+from commons.files import *
+from commons.startup import *
+from path import *
 
-def usage():
+def usage(argv):
     print """
 Usage:
 
@@ -27,15 +34,16 @@ above order, one per line (e.g. ~/.gbookmark2delicious).  Remember to chmod
 600!
 
 Additional options:
-    --feedfile <feedfile>   Cache of the Google Bookmarks. If file exists, then
-                            read it. Otherwise, cache the Google Bookmarks here.
+    --cachedir <cachedir>   Local cache. If data exists here, then use it.
+                            Otherwise, fetch the data remotely (and cache
+                            here).
     --camelcase             Use camel case (rather leaving capitalization
                             unchanged) in the tag translation.
     --underscores           Replace spaces with underscores (rather than
                             removing them) in the tag translation.
     --replace               Whether to replace existing entries for same URLs
                             (default: no)
-    """ % (os.path.basename(sys.argv[0]), os.path.basename(sys.argv[0]))
+    """ % (os.path.basename(argv[0]), os.path.basename(argv[0]))
 
 def process_args(argv):
     """
@@ -48,7 +56,7 @@ def process_args(argv):
         delicioususername=
         deliciouspassword=
         credfile=
-        feedfile=
+        cachedir=
         camelcase
         underscores
         replace
@@ -57,19 +65,19 @@ def process_args(argv):
     try:
         opts, args = getopt.getopt(argv, "", optconfig)
     except getopt.GetoptError:
-        usage()
+        usage(argv)
         sys.exit(2)
 
     global _goog_username, _goog_password, \
             _delicious_username, _delicious_password, \
-            _feed_file, _camelcase, _underscores, _replace
+            _cache_dir, _camelcase, _underscores, _replace
     _goog_username, _goog_password, \
             _delicious_username, _delicious_password, \
-            _feed_file = None, None, None, None, None
+            _cache_dir = None, None, None, None, None
     _camelcase, _underscores, _replace = False, False, False
     for opt, arg in opts:
         if opt in ("--help"):
-            usage()
+            usage(argv)
             sys.exit()
         elif opt == '--googusername':
             _goog_username = arg
@@ -80,15 +88,12 @@ def process_args(argv):
         elif opt == "--deliciouspassword":
             _delicious_password = arg
         elif opt == "--credfile":
-            f = file(arg)
-            try:
+            with file(arg) as f:
                 [_goog_username, _goog_password,
                  _delicious_username, _delicious_password] = \
                          map(lambda x: x.strip(), f.readlines())
-            finally:
-                f.close()
-        elif opt == "--feedfile":
-            _feed_file = arg
+        elif opt == "--cachedir":
+            _cache_dir = arg
         elif opt == "--camelcase":
             _camelcase = True
         elif opt == "--underscores":
@@ -105,8 +110,8 @@ def munge_tag(string):
     Strip the spaces in a string and CamelCase it - del.icio.us tags cannot have spaces, but
     Google bookmark labels can have.
     """
-    glue = _underscores and "_" or ""
-    munger = _camelcase and (lambda x: x.title()) or (lambda x: x)
+    glue = "_" if _underscores else ""
+    munger = (lambda x: x.title()) if _camelcase else (lambda x: x)
     return "_".join(map(munger, string.split()))
 
 def grab_goog_bookmarks(username, password):
@@ -174,9 +179,9 @@ def parse_feed(feed):
     return dict
 
 def delicious_add(user, password, url, description, tags="", extended="", dt="", replace="no"):
-    global delicious_api
-    if delicious_api is None: delicious_api = pydelicious.DeliciousAPI(user, password)
-    delicious_api.posts_add(url=url,
+    global _delicious_api
+    if _delicious_api is None: _delicious_api = pydelicious.DeliciousAPI(user, password)
+    _delicious_api.posts_add(url=url,
                             description=description,
                             tags=tags,
                             extended=extended,
@@ -204,7 +209,7 @@ def import_to_delicious(bookmarks, username, password):
         print "Tag: ", tag
         print "Updated date: ", dt
         print "<br/><br/>"
-        replacestr = _replace and "yes" or "no"
+        replacestr = "yes" if _replace else "no"
         delicious_add(username, password, url, title, tag, description,
                       replace = replacestr)
 
@@ -212,35 +217,27 @@ def get_value_from_dict(dict, key):
     try: return dict[key]
     except KeyError: return ""
 
-def main():
-    global delicious_api
-    delicious_api = None
+def main(argv):
+    global _delicious_api
+    _delicious_api = None
 
-#    posts = pydelicious.get_all(_delicious_username, _delicious_password)
-#    with file(_dlcs_cache / _dlcs_cache, 'w') as f:
-#        dump(posts, file)
+    process_args(argv[1:])
+    if _cache_dir is None:
+        usage()
+        sys.exit(2)
 
-    process_args(sys.argv[1:])
+    soft_makedirs(_cache_dir)
 
-    feed = None
-    if _feed_file is not None:
-        try:
-            f = file(_feed_file)
-            try: feed = f.read()
-            finally: f.close()
-        except IOError, (errno, errstr):
-            if errno != 2: raise
-    if feed is None:
-        if _feed_file is not None:
-            feed = grab_goog_bookmarks(_goog_username, _goog_password)
-            f = file(_feed_file, 'w')
-            try: f.write(feed)
-            finally: f.close()
-        else:
-            feed = grab_goog_bookmarks(_goog_username, _goog_password)
-    import_to_delicious(parse_feed(feed), _delicious_username, _delicious_password)
+    dlcs_posts = pickle_memoized(lambda *args: path(_cache_dir) / "dlcs") \
+                                (pydelicious.get_all) \
+                                (_delicious_username, _delicious_password)
 
-if __name__ == "__main__":
-    main()
+    goog_posts = file_string_memoized(lambda *args: path(_cache_dir) / "goog") \
+                                     (grab_goog_bookmarks) \
+                                     (_goog_username, _goog_password)
+
+    import_to_delicious(parse_feed(goog_posts), _delicious_username, _delicious_password)
+
+run_main()
 
 # vim:et:sw=4:ts=4
