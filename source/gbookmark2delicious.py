@@ -9,56 +9,105 @@ import re
 import sys
 from urlparse import urlparse
 import urllib2
+from cPickle import *
 
 def usage():
-    print "Usage: %s --googusername <username> --googpassword <password> "\
-        "--delicioususername <username> --deliciouspassword <password>" %os.path.basename(sys.argv[0])
+    print """
+Usage:
+
+  %s --googusername <username>      --googpassword <password>
+     --delicioususername <username> --deliciouspassword <password>
+
+or:
+
+  %s --credfile <credentials file>
+
+where the credentials file contains the four username/password arguments in the
+above order, one per line (e.g. ~/.gbookmark2delicious).  Remember to chmod
+600!
+
+Additional options:
+    --feedfile <feedfile>   Cache of the Google Bookmarks. If file exists, then
+                            read it. Otherwise, cache the Google Bookmarks here.
+    --camelcase             Use camel case (rather leaving capitalization
+                            unchanged) in the tag translation.
+    --underscores           Replace spaces with underscores (rather than
+                            removing them) in the tag translation.
+    --replace               Whether to replace existing entries for same URLs
+                            (default: no)
+    """ % (os.path.basename(sys.argv[0]), os.path.basename(sys.argv[0]))
 
 def process_args(argv):
     """
     Process the command-line arguments.
     """
-    if len(argv) != 8:
-        usage()
-        sys.exit(2)
-
-    try:                                
-        opts, args = getopt.getopt(argv, "", ["help", "googusername=", "googpassword=", 
-                                              "delicioususername=", "deliciouspassword="])
+    optconfigstr = """
+        help
+        googusername=
+        googpassword=
+        delicioususername=
+        deliciouspassword=
+        credfile=
+        feedfile=
+        camelcase
+        underscores
+        replace
+    """
+    optconfig = optconfigstr.split() + [""]
+    try:
+        opts, args = getopt.getopt(argv, "", optconfig)
     except getopt.GetoptError:
         usage()
         sys.exit(2)
 
+    global _goog_username, _goog_password, \
+            _delicious_username, _delicious_password, \
+            _feed_file, _camelcase, _underscores, _replace
+    _goog_username, _goog_password, \
+            _delicious_username, _delicious_password, \
+            _feed_file = None, None, None, None, None
+    _camelcase, _underscores, _replace = False, False, False
     for opt, arg in opts:
         if opt in ("--help"):
-            usage()                     
-            sys.exit()                  
+            usage()
+            sys.exit()
         elif opt == '--googusername':
-            global _goog_username
             _goog_username = arg
         elif opt == "--googpassword":
-            global _goog_password
             _goog_password = arg
         elif opt == "--delicioususername":
-            global _delicious_username
             _delicious_username = arg
         elif opt == "--deliciouspassword":
-            global _delicious_password
             _delicious_password = arg
+        elif opt == "--credfile":
+            f = file(arg)
+            try:
+                [_goog_username, _goog_password,
+                 _delicious_username, _delicious_password] = \
+                         map(lambda x: x.strip(), f.readlines())
+            finally:
+                f.close()
+        elif opt == "--feedfile":
+            _feed_file = arg
+        elif opt == "--camelcase":
+            _camelcase = True
+        elif opt == "--underscores":
+            _underscores = True
+        elif opt == "--replace":
+            _replace = True
 
-def camel_case(string):
+    if None in [_goog_username, _goog_password, _delicious_username, _delicious_password]:
+        usage()
+        sys.exit(2)
+
+def munge_tag(string):
     """
     Strip the spaces in a string and CamelCase it - del.icio.us tags cannot have spaces, but
     Google bookmark labels can have.
     """
-    return "".join(map(lambda x: x.title(), string.split()))
-
-def underscorify(string):
-    """
-    Strip the spaces in a string and under_scorify it - del.icio.us tags cannot have spaces, but
-    Google bookmark labels can have.
-    """
-    return "-".join(string.lower().split())
+    glue = _underscores and "_" or ""
+    munger = _camelcase and (lambda x: x.title()) or (lambda x: x)
+    return "_".join(map(munger, string.split()))
 
 def grab_goog_bookmarks(username, password):
     """
@@ -125,7 +174,14 @@ def parse_feed(feed):
     return dict
 
 def delicious_add(user, password, url, description, tags="", extended="", dt="", replace="no"):
-    pydelicious.add(user, password, url, description, tags, extended, dt, replace)
+    global delicious_api
+    if delicious_api is None: delicious_api = pydelicious.DeliciousAPI(user, password)
+    delicious_api.posts_add(url=url,
+                            description=description,
+                            tags=tags,
+                            extended=extended,
+                            dt=dt,
+                            replace=replace)
 
 def import_to_delicious(bookmarks, username, password):
     """
@@ -136,31 +192,55 @@ def import_to_delicious(bookmarks, username, password):
     for bookmark in bookmarks.entries:
         title = get_value_from_dict(bookmark, "title")
         url = get_value_from_dict(bookmark, "link")
-        description = get_value_from_dict(bookmark, "bkmk_annotation")
-        label = get_value_from_dict(bookmark, "bkmk_label")
-        tag = underscorify(label)
+        description = get_value_from_dict(bookmark, "smh_bkmk_annotation")
+        label = get_value_from_dict(bookmark, "smh_bkmk_label")
+        tag = munge_tag(label)
         dt = get_value_from_dict(bookmark, "date")
 
         print "Title: ", title.encode("ascii", "ignore")
         print "URL: ", url
-        print "Description: ", description 
+        print "Description: ", description
         print "Label: ", label
-        print "Tag: ", tag 
+        print "Tag: ", tag
         print "Updated date: ", dt
         print "<br/><br/>"
-        delicious_add(username, password, url, title, tag)
-
+        replacestr = _replace and "yes" or "no"
+        delicious_add(username, password, url, title, tag, description,
+                      replace = replacestr)
 
 def get_value_from_dict(dict, key):
-    try:
-        return dict[key] 
-    except KeyError:
-        return ""
+    try: return dict[key]
+    except KeyError: return ""
 
 def main():
+    global delicious_api
+    delicious_api = None
+
+#    posts = pydelicious.get_all(_delicious_username, _delicious_password)
+#    with file(_dlcs_cache / _dlcs_cache, 'w') as f:
+#        dump(posts, file)
+
     process_args(sys.argv[1:])
-    feed = grab_goog_bookmarks(_goog_username, _goog_password)
+
+    feed = None
+    if _feed_file is not None:
+        try:
+            f = file(_feed_file)
+            try: feed = f.read()
+            finally: f.close()
+        except IOError, (errno, errstr):
+            if errno != 2: raise
+    if feed is None:
+        if _feed_file is not None:
+            feed = grab_goog_bookmarks(_goog_username, _goog_password)
+            f = file(_feed_file, 'w')
+            try: f.write(feed)
+            finally: f.close()
+        else:
+            feed = grab_goog_bookmarks(_goog_username, _goog_password)
     import_to_delicious(parse_feed(feed), _delicious_username, _delicious_password)
 
 if __name__ == "__main__":
     main()
+
+# vim:et:sw=4:ts=4
