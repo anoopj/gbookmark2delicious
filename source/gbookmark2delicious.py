@@ -19,6 +19,8 @@ from commons.seqs import *
 from commons.startup import *
 from path import *
 from time import *
+from xml.etree import ElementTree
+from itertools import *
 
 def usage(argv):
     print """
@@ -107,7 +109,7 @@ def process_args(argv):
         usage()
         sys.exit(2)
 
-def munge_tag(string):
+def munge_label(string):
     """
     Strip the spaces in a string and CamelCase it - del.icio.us tags cannot have spaces, but
     Google bookmark labels can have.
@@ -188,25 +190,25 @@ def delicious_add(url, description, tags="", extended="", dt="", replace="no"):
                             dt=dt,
                             replace=replace)
 
-def import_to_delicious(bookmarks):
+def import_to_delicious(bookmarks, elts):
     """
     Input is a dictionary which contains all the Google bookmarks.
     """
     print "<b>Importing %d bookmarks</b>" %len(bookmarks)
     print "<br/><br/>"
-    for bookmark in bookmarks:
+    for bookmark, elt in izip( bookmarks, elts ):
         title = get_value_from_dict(bookmark, "title")
         url = get_value_from_dict(bookmark, "link")
         description = get_value_from_dict(bookmark, "smh_bkmk_annotation")
-        label = get_value_from_dict(bookmark, "smh_bkmk_label")
-        tag = munge_tag(label)
+        labels = elt.findall('{http://www.google.com/history/}bkmk_label')
+        tags = ' '.join(munge_label(label.text) for label in labels)
         dt = get_value_from_dict(bookmark, "date")
 
         print "Title:", title.encode("ascii", "ignore")
         print "URL:", url
         print "Description:", description
-        print "Label:", label
-        print "Tag:", tag
+        print "Label:", [label.text for label in labels]
+        print "Tag:", tags
         print "Updated date:", dt
         print "<br/><br/>"
         replacestr = "yes" if _replace else "no"
@@ -217,7 +219,7 @@ def import_to_delicious(bookmarks):
         while True:
             backoff = 60
             try:
-                delicious_add(url, title, tag, description,
+                delicious_add(url, title, tags, description,
                               replace = replacestr)
             except pydelicious.PyDeliciousException:
                 print 'backing off for', backoff, 'seconds'
@@ -243,12 +245,15 @@ def main(argv):
 
     soft_makedirs(_cache_dir)
 
-    versioned_cache( path(_cache_dir) / 'dlcs-timestamp',
-                     _delicious_api.posts_update()['update']['time'],
-                     path(_cache_dir) / "dlcs",
-                     lambda: _delicious_api.posts_all() )
+    dlcs_posts = versioned_cache(
+            path(_cache_dir) / 'dlcs-timestamp',
+            _delicious_api.posts_update()['update']['time'],
+            path(_cache_dir) / "dlcs",
+            lambda: _delicious_api.posts_all()
+            )
 
     goog_posts = None
+    goog_tree = None
     for start in countstep(1, 1000):
         print 'goog', start
         feed = file_string_memoized(lambda username, password, start: \
@@ -256,9 +261,15 @@ def main(argv):
                                    (grab_goog_bookmarks) \
                                    (_goog_username, _goog_password, start)
         posts = feedparser.parse(feed)
+        tree = ElementTree.parse(path(_cache_dir) / ("goog%d" % start))
 
-        if goog_posts == None: goog_posts = posts
-        else: goog_posts.entries.extend(posts.entries)
+        if goog_posts == None:
+            goog_posts = posts
+            goog_tree  = tree
+        else:
+            goog_posts.entries.extend(posts.entries)
+            for item in tree.findall('/channel/item'):
+                goog_tree.findall('/channel')[0].append(item)
 
         if len(posts.entries) < 1000: break
 
@@ -274,14 +285,16 @@ def main(argv):
           'add',  len(keys_to_add), 'rm',   len(keys_to_rm)
 
     to_add = [ post for post in goog_posts.entries
-               if post.link    in keys_to_add ]
+               if post.link in keys_to_add ]
     to_rm  = [ post for post in dlcs_posts['posts']
-               if post['href'] in keys_to_rm  ]
+               if post['href'] in keys_to_rm ]
+    tree_add = [ post for post in goog_tree.findall('/channel/item')
+                 if post.find('link').text in keys_to_add ]
 
     # Carry out changes.
 
     print 'adding'
-    import_to_delicious(to_add)
+    import_to_delicious(to_add, tree_add)
 
     # TODO implement removal
     # print 'removing'
