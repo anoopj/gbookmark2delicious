@@ -180,10 +180,7 @@ def parse_feed(feed):
     dict = feedparser.parse(feed)
     return dict
 
-def delicious_add(user, password, url, description, tags="", extended="", dt="", replace="no"):
-    global _delicious_api
-    if _delicious_api is None:
-        _delicious_api = pydelicious.DeliciousAPI(user, password)
+def delicious_add(url, description, tags="", extended="", dt="", replace="no"):
     _delicious_api.posts_add(url=url,
                             description=description,
                             tags=tags,
@@ -191,7 +188,7 @@ def delicious_add(user, password, url, description, tags="", extended="", dt="",
                             dt=dt,
                             replace=replace)
 
-def import_to_delicious(bookmarks, username, password):
+def import_to_delicious(bookmarks):
     """
     Input is a dictionary which contains all the Google bookmarks.
     """
@@ -216,17 +213,18 @@ def import_to_delicious(bookmarks, username, password):
 
         # 10-second inter-request delay with exponential backoff.
 
-        normal_wait = 10
+        normal_wait = 1
         while True:
             backoff = 60
             try:
-                delicious_add(username, password, url, title, tag, description,
+                delicious_add(url, title, tag, description,
                               replace = replacestr)
-            except urllib2.HTTPError:
+            except pydelicious.PyDeliciousException:
+                print 'backing off for', backoff, 'seconds'
                 sleep(backoff)
                 backoff = 5 * backoff
             else:
-                sleep(10)
+                sleep(normal_wait)
                 break
 
 def get_value_from_dict(dict, key):
@@ -235,18 +233,20 @@ def get_value_from_dict(dict, key):
 
 def main(argv):
     global _delicious_api
-    _delicious_api = None
 
     process_args(argv[1:])
     if _cache_dir is None:
         usage()
         sys.exit(2)
 
+    _delicious_api = pydelicious.apiNew(_delicious_username, _delicious_password)
+
     soft_makedirs(_cache_dir)
 
-    dlcs_posts = pickle_memoized(lambda *args: path(_cache_dir) / "dlcs") \
-                                (pydelicious.get_all) \
-                                (_delicious_username, _delicious_password)
+    versioned_cache( path(_cache_dir) / 'dlcs-timestamp',
+                     _delicious_api.posts_update()['update']['time'],
+                     path(_cache_dir) / "dlcs",
+                     lambda: _delicious_api.posts_all() )
 
     goog_posts = None
     for start in countstep(1, 1000):
@@ -281,7 +281,7 @@ def main(argv):
     # Carry out changes.
 
     print 'adding'
-    import_to_delicious(to_add, _delicious_username, _delicious_password)
+    import_to_delicious(to_add)
 
     # TODO implement removal
     # print 'removing'
