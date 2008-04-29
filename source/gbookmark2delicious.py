@@ -15,6 +15,7 @@ from cPickle import *
 from functools import *
 from commons.decs import *
 from commons.files import *
+from commons.seqs import *
 from commons.startup import *
 from path import *
 
@@ -114,11 +115,11 @@ def munge_tag(string):
     munger = (lambda x: x.title()) if _camelcase else (lambda x: x)
     return "_".join(map(munger, string.split()))
 
-def grab_goog_bookmarks(username, password):
+def grab_goog_bookmarks(username, password, start):
     """
     Grab the Google bookmarks as an RSS feed.
     """
-    url = 'https://www.google.com/bookmarks/find?q=&output=rss&num=10000'
+    url = 'https://www.google.com/bookmarks/find?q=&output=rss&num=10000&start=%d' % start
     request = urllib2.Request(url)
     try:
         handle = urllib2.urlopen(request)
@@ -202,12 +203,12 @@ def import_to_delicious(bookmarks, username, password):
         tag = munge_tag(label)
         dt = get_value_from_dict(bookmark, "date")
 
-        print "Title: ", title.encode("ascii", "ignore")
-        print "URL: ", url
-        print "Description: ", description
-        print "Label: ", label
-        print "Tag: ", tag
-        print "Updated date: ", dt
+        print "Title:", title.encode("ascii", "ignore")
+        print "URL:", url
+        print "Description:", description
+        print "Label:", label
+        print "Tag:", tag
+        print "Updated date:", dt
         print "<br/><br/>"
         replacestr = "yes" if _replace else "no"
         delicious_add(username, password, url, title, tag, description,
@@ -232,9 +233,27 @@ def main(argv):
                                 (pydelicious.get_all) \
                                 (_delicious_username, _delicious_password)
 
-    goog_posts = file_string_memoized(lambda *args: path(_cache_dir) / "goog") \
-                                     (grab_goog_bookmarks) \
-                                     (_goog_username, _goog_password)
+    goog_posts = None
+    for start in countstep(1, 1000):
+        print 'goog', start
+        feed = file_string_memoized(lambda username, password, start: \
+                                      path(_cache_dir) / ("goog%d" % start)) \
+                                   (grab_goog_bookmarks) \
+                                   (_goog_username, _goog_password, start)
+        posts = feedparser.parse(feed)
+
+        if goog_posts == None: goog_posts = posts
+        else: goog_posts.entries.extend(posts.entries)
+
+        if len(posts.entries) < 1000: break
+
+    dlcs_keys = set( post['href'] for post in dlcs_posts['posts'] )
+    goog_keys = set( post.link for post in goog_posts.entries )
+
+    to_add = goog_keys - dlcs_keys
+    to_rm  = dlcs_keys - goog_keys
+
+    print 'dlcs', len(dlcs_keys), 'goog', len(goog_keys), 'add', len(to_add), 'rm', len(to_rm)
 
     import_to_delicious(parse_feed(goog_posts), _delicious_username, _delicious_password)
 
