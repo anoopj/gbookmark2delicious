@@ -216,8 +216,8 @@ def import_to_delicious(bookmarks, elts):
         # 10-second inter-request delay with exponential backoff.
 
         normal_wait = 1
+        backoff = 60
         while True:
-            backoff = 60
             try:
                 delicious_add(url, title, tags, description,
                               replace = replacestr)
