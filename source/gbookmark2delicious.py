@@ -15,6 +15,7 @@ from cPickle import *
 from functools import *
 from commons.decs import *
 from commons.files import *
+from commons.networking import *
 from commons.seqs import *
 from commons.startup import *
 from path import *
@@ -74,11 +75,11 @@ def process_args(argv):
 
     global _goog_username, _goog_password, \
             _delicious_username, _delicious_password, \
-            _cache_dir, _camelcase, _underscores, _replace
+            _cache_dir, _camelcase, _underscores, _noreplace
     _goog_username, _goog_password, \
             _delicious_username, _delicious_password, \
             _cache_dir = None, None, None, None, None
-    _camelcase, _underscores, _replace = False, False, False
+    _camelcase, _underscores, _noreplace = False, False, False
     for opt, arg in opts:
         if opt in ("--help"):
             usage(argv)
@@ -103,7 +104,7 @@ def process_args(argv):
         elif opt == "--underscores":
             _underscores = True
         elif opt == "--replace":
-            _replace = True
+            _noreplace = True
 
     if None in [_goog_username, _goog_password, _delicious_username, _delicious_password]:
         usage()
@@ -182,6 +183,12 @@ def parse_feed(feed):
     dict = feedparser.parse(feed)
     return dict
 
+def retry(func):
+    def helper():
+        try: return func()
+        except pydelicious.PyDeliciousException: return None
+    return retry_exp_backoff(60, 5, helper)
+
 def delicious_add(url, description, tags="", extended="", dt="", replace="no"):
     _delicious_api.posts_add(url=url,
                             description=description,
@@ -197,37 +204,26 @@ def import_to_delicious(bookmarks, elts):
     print "<b>Importing %d bookmarks</b>" %len(bookmarks)
     print "<br/><br/>"
     for bookmark, elt in izip( bookmarks, elts ):
-        title = get_value_from_dict(bookmark, "title")
-        url = get_value_from_dict(bookmark, "link")
+        title       = get_value_from_dict(bookmark, "title")
+        url         = get_value_from_dict(bookmark, "link")
         description = get_value_from_dict(bookmark, "smh_bkmk_annotation")
-        labels = elt.findall('{http://www.google.com/history/}bkmk_label')
-        tags = ' '.join(munge_label(label.text) for label in labels)
-        dt = get_value_from_dict(bookmark, "date")
+        labels      = elt.findall('{http://www.google.com/history/}bkmk_label')
+        tags        = ' '.join(munge_label(label.text) for label in labels)
+        dt          = get_value_from_dict(bookmark, "date")
+        replacestr  = "no" if _noreplace else "yes"
 
         print "Title:", title.encode("ascii", "ignore")
         print "URL:", url
         print "Description:", description
-        print "Label:", [label.text for label in labels]
-        print "Tag:", tags
+        print "Labels:", [label.text for label in labels]
+        print "Tags:", tags
         print "Updated date:", dt
         print "<br/><br/>"
-        replacestr = "yes" if _replace else "no"
 
-        # 10-second inter-request delay with exponential backoff.
+        retry(lambda: delicious_add(url, title, tags, description,
+                                    replace = replacestr))
 
-        normal_wait = 1
-        backoff = 60
-        while True:
-            try:
-                delicious_add(url, title, tags, description,
-                              replace = replacestr)
-            except pydelicious.PyDeliciousException:
-                print 'backing off for', backoff, 'seconds'
-                sleep(backoff)
-                backoff = 5 * backoff
-            else:
-                sleep(normal_wait)
-                break
+        sleep(1)
 
 def get_value_from_dict(dict, key):
     try: return dict[key]
@@ -246,11 +242,11 @@ def main(argv):
     soft_makedirs(_cache_dir)
 
     dlcs_posts = versioned_cache(
-            path(_cache_dir) / 'dlcs-timestamp',
-            _delicious_api.posts_update()['update']['time'],
-            path(_cache_dir) / "dlcs",
-            lambda: _delicious_api.posts_all()
-            )
+                 path(_cache_dir) / 'dlcs-timestamp',
+                 _delicious_api.posts_update()['update']['time'],
+                 path(_cache_dir) / "dlcs",
+                 lambda: retry(_delicious_api.posts_all)
+                 )
 
     goog_posts = None
     goog_tree = None
@@ -280,24 +276,53 @@ def main(argv):
 
     keys_to_add = goog_keys - dlcs_keys
     keys_to_rm  = dlcs_keys - goog_keys
+    keys_common = goog_keys & dlcs_keys
 
-    print 'dlcs', len(dlcs_keys),   'goog', len(goog_keys), \
-          'add',  len(keys_to_add), 'rm',   len(keys_to_rm)
-
-    to_add = [ post for post in goog_posts.entries
-               if post.link in keys_to_add ]
-    to_rm  = [ post for post in dlcs_posts['posts']
-               if post['href'] in keys_to_rm ]
+    to_add   = [ post for post in goog_posts.entries
+                 if post.link in keys_to_add ]
+    to_rm    = [ post for post in dlcs_posts['posts']
+                 if post['href'] in keys_to_rm ]
     tree_add = [ post for post in goog_tree.findall('/channel/item')
                  if post.find('link').text in keys_to_add ]
 
+    # Determine what posts need updating.
+
+    goog_map = dict( ( post.link, ( post, elt ) ) for post, elt in
+            izip( goog_posts.entries, goog_tree.findall('/channel/item') ) )
+    dlcs_map = dict( ( post['href'], post ) for post in dlcs_posts['posts'] )
+    def compare((gp,ge),d):
+        assert gp.link == d['href']
+
+#        printed = False
+#        if get_value_from_dict(gp, "title") != d['description']:
+#            print get_value_from_dict(gp, "title"), '!=', d['description']
+#            printed = True
+#        if get_value_from_dict(gp, "description") != "" and get_value_from_dict(gp, "description") != d['extended']:
+#            print get_value_from_dict(gp, "description"), '!=', d['extended']
+#            printed = True
+##        if ' '.join(munge_label(x.text) for x in ge.findall('{http://www.google.com/history/}bkmk_label')) != d['tag']:
+##            print ' '.join(munge_label(x.text) for x in ge.findall('{http://www.google.com/history/}bkmk_label')), '!=', d['tag']
+##            printed = True
+#        if printed: print
+        return (get_value_from_dict(gp, "title") == d['description'] or True) \
+                and get_value_from_dict(gp, "description") == d['extended'] \
+                and ' '.join(munge_label(x.text) for x in ge.findall('{http://www.google.com/history/}bkmk_label')) == d['tag']
+    [ to_up, tree_up ] = zip( *[ goog_map[url] for url in keys_common if
+                                 not compare( goog_map[url], dlcs_map[url] ) ] )
+
+    print 'dlcs', len(dlcs_keys), 'goog', len(goog_keys), \
+          'add',  len(to_add),    'rm',   len(to_rm),     'up', len(to_up)
+
     # Carry out changes.
+
+    print 'updating'
+    import_to_delicious(to_up, tree_up)
 
     print 'adding'
     import_to_delicious(to_add, tree_add)
 
-    # TODO implement removal
-    # print 'removing'
+    print 'removing'
+    for url in keys_to_rm: _delicious_api.posts_delete(url)
 
 run_main()
 
