@@ -20,7 +20,7 @@ from commons.seqs import *
 from commons.startup import *
 from path import *
 from time import *
-from xml.etree import ElementTree
+from xml.etree import *
 from itertools import *
 
 def usage(argv):
@@ -46,7 +46,7 @@ Additional options:
                             unchanged) in the tag translation.
     --underscores           Replace spaces with underscores (rather than
                             removing them) in the tag translation.
-    --replace               Whether to replace existing entries for same URLs
+    --noreplace             Whether to replace existing entries for same URLs
                             (default: no)
     """ % (os.path.basename(argv[0]), os.path.basename(argv[0]))
 
@@ -103,7 +103,7 @@ def process_args(argv):
             _camelcase = True
         elif opt == "--underscores":
             _underscores = True
-        elif opt == "--replace":
+        elif opt == "--noreplace":
             _noreplace = True
 
     if None in [_goog_username, _goog_password, _delicious_username, _delicious_password]:
