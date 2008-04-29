@@ -18,6 +18,7 @@ from commons.files import *
 from commons.seqs import *
 from commons.startup import *
 from path import *
+from time import *
 
 def usage(argv):
     print """
@@ -181,7 +182,8 @@ def parse_feed(feed):
 
 def delicious_add(user, password, url, description, tags="", extended="", dt="", replace="no"):
     global _delicious_api
-    if _delicious_api is None: _delicious_api = pydelicious.DeliciousAPI(user, password)
+    if _delicious_api is None:
+        _delicious_api = pydelicious.DeliciousAPI(user, password)
     _delicious_api.posts_add(url=url,
                             description=description,
                             tags=tags,
@@ -193,9 +195,9 @@ def import_to_delicious(bookmarks, username, password):
     """
     Input is a dictionary which contains all the Google bookmarks.
     """
-    print "<b>Importing %d bookmarks</b>" %len(bookmarks.entries)
+    print "<b>Importing %d bookmarks</b>" %len(bookmarks)
     print "<br/><br/>"
-    for bookmark in bookmarks.entries:
+    for bookmark in bookmarks:
         title = get_value_from_dict(bookmark, "title")
         url = get_value_from_dict(bookmark, "link")
         description = get_value_from_dict(bookmark, "smh_bkmk_annotation")
@@ -211,8 +213,21 @@ def import_to_delicious(bookmarks, username, password):
         print "Updated date:", dt
         print "<br/><br/>"
         replacestr = "yes" if _replace else "no"
-        delicious_add(username, password, url, title, tag, description,
-                      replace = replacestr)
+
+        # 10-second inter-request delay with exponential backoff.
+
+        normal_wait = 10
+        while True:
+            backoff = 60
+            try:
+                delicious_add(username, password, url, title, tag, description,
+                              replace = replacestr)
+            except urllib2.HTTPError:
+                sleep(backoff)
+                backoff = 5 * backoff
+            else:
+                sleep(10)
+                break
 
 def get_value_from_dict(dict, key):
     try: return dict[key]
@@ -247,15 +262,29 @@ def main(argv):
 
         if len(posts.entries) < 1000: break
 
+    # Calculate the set differences (what to add/remove).
+
     dlcs_keys = set( post['href'] for post in dlcs_posts['posts'] )
-    goog_keys = set( post.link for post in goog_posts.entries )
+    goog_keys = set( post.link    for post in goog_posts.entries )
 
-    to_add = goog_keys - dlcs_keys
-    to_rm  = dlcs_keys - goog_keys
+    keys_to_add = goog_keys - dlcs_keys
+    keys_to_rm  = dlcs_keys - goog_keys
 
-    print 'dlcs', len(dlcs_keys), 'goog', len(goog_keys), 'add', len(to_add), 'rm', len(to_rm)
+    print 'dlcs', len(dlcs_keys),   'goog', len(goog_keys), \
+          'add',  len(keys_to_add), 'rm',   len(keys_to_rm)
 
-    import_to_delicious(parse_feed(goog_posts), _delicious_username, _delicious_password)
+    to_add = [ post for post in goog_posts.entries
+               if post.link    in keys_to_add ]
+    to_rm  = [ post for post in dlcs_posts['posts']
+               if post['href'] in keys_to_rm  ]
+
+    # Carry out changes.
+
+    print 'adding'
+    import_to_delicious(to_add, _delicious_username, _delicious_password)
+
+    # TODO implement removal
+    # print 'removing'
 
 run_main()
 
