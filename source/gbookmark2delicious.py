@@ -1,114 +1,63 @@
 #!/usr/bin/env python
 
 from __future__ import with_statement
-
 import base64
 import feedparser
-import getopt
 import pydelicious
-import os
 import re
-import sys
 from urlparse import urlparse
 import urllib2
-from cPickle import *
-from functools import *
-from commons.decs import *
-from commons.files import *
-from commons.networking import *
-from commons.seqs import *
-from commons.startup import *
-from path import *
-from time import *
-from xml.etree import *
-from itertools import *
-
-def usage(argv):
-    print """
-Usage:
-
-  %s --googusername <username>      --googpassword <password>
-     --delicioususername <username> --deliciouspassword <password>
-
-or:
-
-  %s --credfile <credentials file>
-
-where the credentials file contains the four username/password arguments in the
-above order, one per line (e.g. ~/.gbookmark2delicious).  Remember to chmod
-600!
-
-Additional options:
-    --cachedir <cachedir>   Local cache. If data exists here, then use it.
-                            Otherwise, fetch the data remotely (and cache
-                            here).
-    --camelcase             Use camel case (rather leaving capitalization
-                            unchanged) in the tag translation.
-    --underscores           Replace spaces with underscores (rather than
-                            removing them) in the tag translation.
-    --noreplace             Whether to replace existing entries for same URLs
-                            (default: no)
-    """ % (os.path.basename(argv[0]), os.path.basename(argv[0]))
+from commons.decs import file_string_memoized
+from commons.files import versioned_cache
+from commons.log import *
+from commons.networking import retry_exp_backoff
+from commons.seqs import countstep
+from commons.startup import run_main
+from path import path
+from time import sleep
+from xml.etree import ElementTree
+from itertools import izip
+from argparse import ArgumentParser
 
 def process_args(argv):
     """
     Process the command-line arguments.
     """
-    optconfigstr = """
-        help
-        googusername=
-        googpassword=
-        delicioususername=
-        deliciouspassword=
-        credfile=
-        cachedir=
-        camelcase
-        underscores
-        replace
-    """
-    optconfig = optconfigstr.split() + [""]
-    try:
-        opts, args = getopt.getopt(argv, "", optconfig)
-    except getopt.GetoptError:
-        usage(argv)
-        sys.exit(2)
+    parser = ArgumentParser(description = """
+        Synchronize del.icio.us bookmarks against Google Bookmarks.
+        """)
 
-    global _goog_username, _goog_password, \
-            _delicious_username, _delicious_password, \
-            _cache_dir, _camelcase, _underscores, _noreplace
-    _goog_username, _goog_password, \
-            _delicious_username, _delicious_password, \
-            _cache_dir = None, None, None, None, None
-    _camelcase, _underscores, _noreplace = False, False, False
-    for opt, arg in opts:
-        if opt in ("--help"):
-            usage(argv)
-            sys.exit()
-        elif opt == '--googusername':
-            _goog_username = arg
-        elif opt == "--googpassword":
-            _goog_password = arg
-        elif opt == "--delicioususername":
-            _delicious_username = arg
-        elif opt == "--deliciouspassword":
-            _delicious_password = arg
-        elif opt == "--credfile":
-            with file(arg) as f:
-                [_goog_username, _goog_password,
-                 _delicious_username, _delicious_password] = \
-                         map(lambda x: x.strip(), f.readlines())
-        elif opt == "--cachedir":
-            _cache_dir = arg
-        elif opt == "--camelcase":
-            _camelcase = True
-        elif opt == "--underscores":
-            _underscores = True
-        elif opt == "--noreplace":
-            _noreplace = True
+    parser.add_argument('--googuser', help = "Google username.")
+    parser.add_argument('--googpass', help = "Google password.")
+    parser.add_argument('--dlcsuser', help = "del.icio.us username.")
+    parser.add_argument('--dlcspass', help = "del.icio.us username.")
 
-    if None in [_goog_username, _goog_password, _delicious_username, _delicious_password]:
-        usage()
-        sys.exit(2)
+    parser.add_argument('--credfile',
+                        default = path( '~/.gbookmark2delicious.auth' ).expanduser(),
+                        help = "File containing the four username/password "
+                        "arguments in the above order, one per line. "
+                        "Remember to chmod 600! "
+                        "(The command-line arguments get precedence.)")
+    parser.add_argument('--cachedir',
+                        default = path( '~/.gbookmark2delicious.cache' ).expanduser(),
+                        help = "Local cache. If data exists here, then use it. "
+                        "Otherwise, fetch the data remotely (and cache here).")
+
+    parser.add_argument('--camelcase', action = 'store_true',
+                        help = "Use camel case (rather than leaving capitalization unchanged) in the tag translation.")
+    parser.add_argument('--underscores', action = 'store_true',
+                        help = "Replace spaces with underscores (rather than removing them) in the tag translation.")
+    parser.add_argument('--noreplace', action = 'store_true',
+                        help = "Whether to replace existing entries for same URLs")
+
+    config = parser.parse_args(argv)
+    if config.googuser is None or config.googpass is None or \
+            config.dlcsuser is None or config.dlcspass is None:
+        with file(config.credfile) as f:
+            c = config
+            [c.googuser, c.googpass, c.dlcsuser, c.dlcspass] = \
+                    map(str.strip, f.readlines())
+    return config
 
 def munge_label(string):
     """
@@ -132,14 +81,11 @@ def grab_goog_bookmarks(username, password, start):
         pass
     else:
         # If we don't fail then the page isn't protected.
-        print 'Page is not protected by authentication.'
-        sys.exit(1)
+        die( 'Page is not protected by authentication.' )
 
     if not hasattr(cause, 'code') or cause.code != 401:
         # Got an error - but not a 401
-        print 'Page is not protected by authentication.'
-        print 'But we failed for another reason. Error Code: ' + e.code
-        sys.exit(1)
+        die( 'Page is not protected by authentication. But we failed for another reason. Error Code: ' + e.code )
 
     # Get the www-authenticate line from the headers
     # which has the authentication scheme and realm in it.
@@ -153,16 +99,13 @@ def grab_goog_bookmarks(username, password, start):
     if not matchobj:
         # If the authline isn't matched by the regular expression
         # then something is wrong.
-        print 'The authentication header is badly formed.'
-        print authline
-        sys.exit(1)
+        die( 'The authentication header is badly formed: ' + authline )
 
     # Extract the scheme and the realm from the header.
     scheme = matchobj.group(1)
     realm = matchobj.group(2)
     if scheme.lower() != 'basic':
-        print 'Supports only BASIC authentication.'
-        sys.exit(1)
+        die( 'Supports only BASIC authentication.' )
 
     base64string = base64.encodestring('%s:%s' % (username, password))[:-1]
     authheader =  "Basic %s" % base64string
@@ -171,8 +114,7 @@ def grab_goog_bookmarks(username, password, start):
         handle = urllib2.urlopen(request)
     except IOError, e:
         # Here we shouldn't fail if the username/password is right
-        print "Looks like the Google username or password is wrong."
-        sys.exit(1)
+        die( "Looks like the Google username or password is wrong." )
     thepage = handle.read()
     return thepage
 
@@ -202,8 +144,7 @@ def import_to_delicious(bookmarks, elts):
     """
     Input is a dictionary which contains all the Google bookmarks.
     """
-    print "<b>Importing %d bookmarks</b>" %len(bookmarks)
-    print "<br/><br/>"
+    info( 'importing', len(bookmarks), 'bookmarks' )
     for bookmark, elt in izip( bookmarks, elts ):
         title       = get_value_from_dict(bookmark, "title")
         url         = get_value_from_dict(bookmark, "link")
@@ -213,13 +154,13 @@ def import_to_delicious(bookmarks, elts):
         dt          = get_value_from_dict(bookmark, "date")
         replacestr  = "no" if _noreplace else "yes"
 
-        print "Title:", title.encode("ascii", "ignore")
-        print "URL:", url
-        print "Description:", description
-        print "Labels:", [label.text for label in labels]
-        print "Tags:", tags
-        print "Updated date:", dt
-        print "<br/><br/>"
+        info( "Title:", title.encode("ascii", "ignore") )
+        info( "URL:", url )
+        info( "Description:", description )
+        info( "Labels:", [label.text for label in labels] )
+        info( "Tags:", tags )
+        info( "Updated date:", dt )
+        info( "<br/><br/>" )
 
         retry(lambda: delicious_add(url, title, tags, description,
                                     replace = replacestr))
@@ -233,32 +174,32 @@ def get_value_from_dict(dict, key):
 def main(argv):
     global _delicious_api
 
-    process_args(argv[1:])
-    if _cache_dir is None:
-        usage()
-        sys.exit(2)
+    config = process_args(argv[1:])
 
-    _delicious_api = pydelicious.apiNew(_delicious_username, _delicious_password)
+    _delicious_api = pydelicious.apiNew(config.dlcsuser, config.dlcspass)
 
-    soft_makedirs(_cache_dir)
+    soft_makedirs(config.cachedir)
+
+    # Get and cache all the delicious posts (if necessary, based on timestamp).
 
     dlcs_posts = versioned_cache(
-                 path(_cache_dir) / 'dlcs-timestamp',
-                 _delicious_api.posts_update()['update']['time'],
-                 path(_cache_dir) / "dlcs",
-                 lambda: retry(_delicious_api.posts_all)
-                 )
+            path(config.cachedir) / 'dlcs-timestamp',
+            _delicious_api.posts_update()['update']['time'],
+            path(config.cachedir) / "dlcs",
+            lambda: retry(_delicious_api.posts_all) )
+
+    # Get, cache, and parse all the Google posts.
 
     goog_posts = None
     goog_tree = None
     for start in countstep(1, 1000):
-        print 'goog', start
+        info( 'goog', start )
         feed = file_string_memoized(lambda username, password, start: \
-                                      path(_cache_dir) / ("goog%d" % start)) \
+                                      path(config.cachedir) / ("goog%d" % start)) \
                                    (grab_goog_bookmarks) \
-                                   (_goog_username, _goog_password, start)
+                                   (config.googuser, config.googpass, start)
         posts = feedparser.parse(feed)
-        tree = ElementTree.parse(path(_cache_dir) / ("goog%d" % start))
+        tree = ElementTree.parse(path(config.cachedir) / ("goog%d" % start))
 
         if goog_posts == None:
             goog_posts = posts
@@ -311,18 +252,18 @@ def main(argv):
     [ to_up, tree_up ] = zip( *[ goog_map[url] for url in keys_common if
                                  not compare( goog_map[url], dlcs_map[url] ) ] )
 
-    print 'dlcs', len(dlcs_keys), 'goog', len(goog_keys), \
-          'add',  len(to_add),    'rm',   len(to_rm),     'up', len(to_up)
+    info( 'dlcs', len(dlcs_keys), 'goog', len(goog_keys), \
+          'add',  len(to_add),    'rm',   len(to_rm),     'up', len(to_up) )
 
     # Carry out changes.
 
-    print 'updating'
+    info( 'updating' )
     import_to_delicious(to_up, tree_up)
 
-    print 'adding'
+    info( 'adding' )
     import_to_delicious(to_add, tree_add)
 
-    print 'removing'
+    info( 'removing' )
     for url in keys_to_rm: _delicious_api.posts_delete(url)
 
 run_main()
