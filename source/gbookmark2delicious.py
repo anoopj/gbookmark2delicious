@@ -8,7 +8,7 @@ import re
 from urlparse import urlparse
 import urllib2
 from commons.decs import file_string_memoized
-from commons.files import versioned_cache
+from commons.files import soft_makedirs, versioned_cache
 from commons.log import *
 from commons.networking import retry_exp_backoff
 from commons.seqs import countstep
@@ -18,6 +18,12 @@ from time import sleep
 from xml.etree import ElementTree
 from itertools import izip
 from argparse import ArgumentParser
+from functools import partial
+
+info = partial(info, '')
+debug = partial(debug, '')
+error = partial(error, '')
+die = partial(die, '')
 
 def process_args(argv):
     """
@@ -64,8 +70,8 @@ def munge_label(string):
     Strip the spaces in a string and CamelCase it - del.icio.us tags cannot have spaces, but
     Google bookmark labels can have.
     """
-    glue = "_" if _underscores else ""
-    munger = (lambda x: x.title()) if _camelcase else (lambda x: x)
+    glue = "_" if config.underscores else ""
+    munger = (lambda x: x.title()) if config.camelcase else (lambda x: x)
     return "_".join(map(munger, string.split()))
 
 def grab_goog_bookmarks(username, password, start):
@@ -152,7 +158,7 @@ def import_to_delicious(bookmarks, elts):
         labels      = elt.findall('{http://www.google.com/history/}bkmk_label')
         tags        = ' '.join(munge_label(label.text) for label in labels)
         dt          = get_value_from_dict(bookmark, "date")
-        replacestr  = "no" if _noreplace else "yes"
+        replacestr  = "no" if config.noreplace else "yes"
 
         info( "Title:", title.encode("ascii", "ignore") )
         info( "URL:", url )
@@ -171,8 +177,15 @@ def get_value_from_dict(dict, key):
     try: return dict[key]
     except KeyError: return ""
 
+def grab_dlcs_posts():
+    info( "getting delicious posts" )
+    return retry(_delicious_api.posts_all)
+
 def main(argv):
-    global _delicious_api
+    global _delicious_api, config
+
+    config_logging(do_console = True)
+    info('testing')
 
     config = process_args(argv[1:])
 
@@ -186,14 +199,14 @@ def main(argv):
             path(config.cachedir) / 'dlcs-timestamp',
             _delicious_api.posts_update()['update']['time'],
             path(config.cachedir) / "dlcs",
-            lambda: retry(_delicious_api.posts_all) )
+            grab_dlcs_posts )
 
     # Get, cache, and parse all the Google posts.
 
     goog_posts = None
     goog_tree = None
     for start in countstep(1, 1000):
-        info( 'goog', start )
+        info( 'getting goog posts starting from', start )
         feed = file_string_memoized(lambda username, password, start: \
                                       path(config.cachedir) / ("goog%d" % start)) \
                                    (grab_goog_bookmarks) \
@@ -239,15 +252,16 @@ def main(argv):
 #        if get_value_from_dict(gp, "title") != d['description']:
 #            print get_value_from_dict(gp, "title"), '!=', d['description']
 #            printed = True
-#        if get_value_from_dict(gp, "description") != "" and get_value_from_dict(gp, "description") != d['extended']:
-#            print get_value_from_dict(gp, "description"), '!=', d['extended']
+#        if get_value_from_dict(gp, "smh_bkmk_annotation") != d['extended']:
+#            print get_value_from_dict(gp, "smh_bkmk_annotation"), '!=', d['extended']
 #            printed = True
-##        if ' '.join(munge_label(x.text) for x in ge.findall('{http://www.google.com/history/}bkmk_label')) != d['tag']:
-##            print ' '.join(munge_label(x.text) for x in ge.findall('{http://www.google.com/history/}bkmk_label')), '!=', d['tag']
-##            printed = True
+#        if ' '.join(munge_label(x.text) for x in ge.findall('{http://www.google.com/history/}bkmk_label')) != d['tag']:
+#            print ' '.join(munge_label(x.text) for x in ge.findall('{http://www.google.com/history/}bkmk_label')), '!=', d['tag']
+#            printed = True
 #        if printed: print
+
         return (get_value_from_dict(gp, "title") == d['description'] or True) \
-                and get_value_from_dict(gp, "description") == d['extended'] \
+                and get_value_from_dict(gp, "smh_bkmk_annotation") == d['extended'] \
                 and ' '.join(munge_label(x.text) for x in ge.findall('{http://www.google.com/history/}bkmk_label')) == d['tag']
     [ to_up, tree_up ] = zip( *[ goog_map[url] for url in keys_common if
                                  not compare( goog_map[url], dlcs_map[url] ) ] )
