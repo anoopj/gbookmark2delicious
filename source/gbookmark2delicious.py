@@ -196,6 +196,7 @@ def delicious_add(url, description, tags="", extended="", dt="", replace="no"):
                             extended=extended,
                             dt=dt,
                             replace=replace)
+    return True
 
 def import_to_delicious(bookmarks, elts):
     """
