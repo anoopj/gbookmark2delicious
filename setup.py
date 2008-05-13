@@ -26,4 +26,4 @@ Classifier: Programming Language :: Python
 Classifier: Topic :: Internet :: WWW/HTTP
 """
 
-setup.run_setup( pkg_info_text, scripts = ['source/gbookmark2delicious.py'] )
+setup.run_setup( pkg_info_text, srcdir = 'source', scripts = ['source/gbookmark2delicious.py'] )
