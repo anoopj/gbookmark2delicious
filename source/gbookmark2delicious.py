@@ -1,5 +1,12 @@
 #!/usr/bin/env python
 
+"""
+Synchronize del.icio.us bookmarks against Google Bookmarks.  By default, I will
+read the credentials file for your logins, fetch all del.icio.us bookmarks (if
+the local cache is out of date), fetch all Google bookmarks (disregarding the
+cache), compare them, and update del.icio.us based on this diff.
+"""
+
 from __future__ import with_statement
 import base64
 import feedparser
@@ -13,6 +20,7 @@ from commons.log import config_logging
 from commons import log
 from commons.networking import retry_exp_backoff
 from commons.seqs import countstep
+from commons.strs import cp1252_to_unicode
 from commons.startup import run_main
 import logging
 from path import path
@@ -32,9 +40,7 @@ def process_args(argv):
     """
     Process the command-line arguments.
     """
-    parser = ArgumentParser(description = """
-        Synchronize del.icio.us bookmarks against Google Bookmarks.
-        """)
+    parser = ArgumentParser(description = __doc__)
 
     parser.add_argument('--googuser', help = "Google username.")
     parser.add_argument('--googpass', help = "Google password.")
@@ -87,7 +93,7 @@ def munge_label(string):
     munger = (lambda x: x.title()) if config.camelcase else (lambda x: x)
     return "_".join(map(munger, string.split()))
 
-def grab_goog_bookmarks(username, password, start):
+def get_goog(username, password, start):
     """
     Grab the Google bookmarks as an RSS feed.
     """
@@ -138,41 +144,38 @@ def grab_goog_bookmarks(username, password, start):
     thepage = handle.read()
     return thepage
 
-def parse_feed(feed):
-    """
-    Parses the RSS feed.
-    """
-    dict = feedparser.parse(feed)
-    return dict
-
-def retry(func):
+def dlcs_retry(func):
     def helper():
         try: return func()
         except pydelicious.PyDeliciousException: return None
     return retry_exp_backoff(300, 5, helper)
 
-def delicious_add(url, description, tags="", extended="", dt="", replace="no"):
-    _delicious_api.posts_add(url=url,
-                            description=description,
-                            tags=tags,
-                            extended=extended,
-                            dt=dt,
-                            replace=replace)
+def put_dlcs(url, description, tags="", extended="", dt="", replace="no"):
+    _dlcs_api.posts_add(url=url,
+                        description=description,
+                        tags=tags,
+                        extended=extended,
+                        dt=dt,
+                        replace=replace)
     return True
 
-def import_to_delicious(bookmarks, elts):
+def dict_get(dict, key):
+    try: return dict[key]
+    except KeyError: return ""
+
+def bulk_put_dlcs(bookmarks, elts):
     """
     Input is a dictionary which contains all the Google bookmarks.
     """
     info( 'importing', len(bookmarks), 'bookmarks' )
     for bookmark, elt in izip( bookmarks, elts ):
-        title       = elt.find('title').text # get_value_from_dict(bookmark, "title")
-        url         = get_value_from_dict(bookmark, "link")
+        title       = elt.find('title').text
+        url         = dict_get(bookmark, "link")
         annot       = elt.find('{http://www.google.com/history/}bkmk_annotation')
         description = annot.text if annot is not None else ''
         labels      = elt.findall('{http://www.google.com/history/}bkmk_label')
         tags        = ' '.join(munge_label(label.text) for label in labels)
-        dt          = get_value_from_dict(bookmark, "date")
+        dt          = dict_get(bookmark, "date")
         replacestr  = "no" if config.noreplace else "yes"
 
         info( "Title:", title.encode("ascii", "ignore") )
@@ -182,59 +185,20 @@ def import_to_delicious(bookmarks, elts):
         info( "Tags:", tags )
         info( "Updated date:", dt )
 
-        retry(lambda: delicious_add(url, title, tags, description,
-                                    replace = replacestr))
+        dlcs_retry(lambda: put_dlcs(url, title, tags, description, replace = replacestr))
 
         sleep(60)
 
-def get_value_from_dict(dict, key):
-    try: return dict[key]
-    except KeyError: return ""
-
-def grab_dlcs_posts():
+def get_dlcs():
     info( "getting delicious posts" )
-    return retry(_delicious_api.posts_all)
+    return dlcs_retry(_dlcs_api.posts_all)
 
 def lookup(elt, field):
     child = elt.find(field)
     return '' if child is None else ucode(child.text.strip())
     # XXX return '' if child is None else child.text.encode('utf-8').strip()
 
-translations = [ (u'\x80',u'\u20AC'),
-                 (u'\x82',u'\u201A'),
-                 (u'\x83',u'\u0192'),
-                 (u'\x84',u'\u201E'),
-                 (u'\x85',u'\u2026'),
-                 (u'\x86',u'\u2020'),
-                 (u'\x87',u'\u2021'),
-                 (u'\x88',u'\u02C6'),
-                 (u'\x89',u'\u2030'),
-                 (u'\x8A',u'\u0160'),
-                 (u'\x8B',u'\u2039'),
-                 (u'\x8C',u'\u0152'),
-                 (u'\x8E',u'\u017D'),
-                 (u'\x91',u'\u2018'),
-                 (u'\x92',u'\u2019'),
-                 (u'\x93',u'\u201C'),
-                 (u'\x94',u'\u201D'),
-                 (u'\x95',u'\u2022'),
-                 (u'\x96',u'\u2013'),
-                 (u'\x97',u'\u2014'),
-                 (u'\x98',u'\u02DC'),
-                 (u'\x99',u'\u2122'),
-                 (u'\x9A',u'\u0161'),
-                 (u'\x9B',u'\u203A'),
-                 (u'\x9C',u'\u0153'),
-                 (u'\x9E',u'\u017E'),
-                 (u'\x9F',u'\u0178') ]
-
-def ucode(x):
-    #return x.translate(maketrans('', ''), badchars)
-    for a,b in translations:
-        x = x.replace(a,b)
-    return x
-
-def equal(label, g, d, extracond = False):
+def fields_equal(label, g, d, extracond = False):
     """
     Delicious bookmarks can be truncated versions of Google Bookmarks, which is
     why we use L{str.startswith}.  We also take C{extracond} for when we can
@@ -252,7 +216,7 @@ def equal(label, g, d, extracond = False):
         log.info( 'compare', repr(d) )
         return False
 
-def compare((gp,ge),d):
+def posts_equal((gp,ge),d):
     """
     @return: True if the Delicious bookmark is similar to the Google Bookmark,
     and False otherwise.
@@ -260,23 +224,23 @@ def compare((gp,ge),d):
     assert gp.link == d['href']
 
     gtitle = lookup(ge, 'title')
-    dtitle = ucode(d['description'])
+    dtitle = cp1252_to_unicode(d['description'])
     gannot = lookup(ge, "{http://www.google.com/history/}bkmk_annotation")
-    dannot = ucode(d['extended'])
+    dannot = cp1252_to_unicode(d['extended'])
     gtags  = ' '.join( munge_label(x.text) for x in ge.findall('{http://www.google.com/history/}bkmk_label') )
-    dtags  = ucode(d['tag'])
+    dtags  = cp1252_to_unicode(d['tag'])
 
-    return ( equal('title', gtitle, dtitle) and
-             equal('annot', gannot, dannot) and
-             equal('tags', gtags, dtags, gtags == '' and dtags == 'system:unfiled' ) )
+    return ( fields_equal('title', gtitle, dtitle) and
+             fields_equal('annot', gannot, dannot) and
+             fields_equal('tags', gtags, dtags, gtags == '' and dtags == 'system:unfiled' ) )
 
 def main(argv):
-    global _delicious_api, config
+    global _dlcs_api, config
 
     config = process_args(argv)
     config_logging(level = logging.ERROR, do_console = True, flags = config.debug)
 
-    _delicious_api = pydelicious.DeliciousAPI(config.dlcsuser, config.dlcspass, 'utf-8')
+    _dlcs_api = pydelicious.DeliciousAPI(config.dlcsuser, config.dlcspass, 'utf-8')
 
     soft_makedirs(config.cachedir)
 
@@ -284,11 +248,13 @@ def main(argv):
 
     dlcs_posts = versioned_cache(
             path(config.cachedir) / 'dlcs-timestamp',
-            _delicious_api.posts_update()['update']['time'],
+            _dlcs_api.posts_update()['update']['time'],
             path(config.cachedir) / "dlcs",
-            grab_dlcs_posts )
+            get_dlcs )
 
-    # Get, cache, and parse all the Google posts.
+    # Get, cache, and parse all the Google posts.  *posts* is the
+    # feedparser-parsed set of RSS posts, while the *tree* is the etree-parsed
+    # XML tree.
 
     goog_posts = None
     goog_tree = None
@@ -296,10 +262,10 @@ def main(argv):
         if config.use_goog_cache:
             feed = file_string_memoized(lambda username, password, start: \
                                           path(config.cachedir) / ("goog%d" % start)) \
-                                       (grab_goog_bookmarks) \
+                                       (get_goog) \
                                        (config.googuser, config.googpass, start)
         else:
-            feed = grab_goog_bookmarks(config.googuser, config.googpass, start)
+            feed = get_goog(config.googuser, config.googpass, start)
             try:
                 with file( path(config.cachedir) / ('goog%d' % start), 'w' ) as f:
                     f.write( feed )
@@ -336,12 +302,14 @@ def main(argv):
 
     # Determine what posts need updating.
 
+    # Construct maps from URLs to posts (both posts and tree for Google).
+
     goog_map = dict( ( post.link, ( post, elt ) ) for post, elt in
             izip( goog_posts.entries, goog_tree.findall('/channel/item') ) )
     dlcs_map = dict( ( post['href'], post ) for post in dlcs_posts['posts'] )
 
     elts_up = zip( *[ goog_map[url] for url in keys_common if
-                      not compare( goog_map[url], dlcs_map[url] ) ] )
+                      not posts_equal( goog_map[url], dlcs_map[url] ) ] )
     to_up, tree_up = elts_up if elts_up != [] else ([], [])
 
     info( 'dlcs', len(dlcs_keys), 'goog', len(goog_keys), \
@@ -350,13 +318,13 @@ def main(argv):
     # Carry out changes.
 
     info( 'updating' )
-    import_to_delicious(to_up, tree_up)
+    bulk_put_dlcs(to_up, tree_up)
 
     info( 'adding' )
-    import_to_delicious(to_add, tree_add)
+    bulk_put_dlcs(to_add, tree_add)
 
     info( 'removing' )
-    for url in keys_to_rm: _delicious_api.posts_delete(url)
+    for url in keys_to_rm: _dlcs_api.posts_delete(url)
 
 run_main()
 
