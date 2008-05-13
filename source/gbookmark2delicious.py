@@ -54,9 +54,9 @@ def process_args(argv):
             command-line arguments get precedence.)""")
     parser.add_argument('--cachedir',
             default = path( '~/.gbookmark2delicious.cache' ).expanduser(),
-            help = """Local cache. If data exists here, then use it.
-            Otherwise, fetch the data remotely (and cache here).""")
-
+            help = """Local cache for both Google and delicious. Google cache
+            is by default ignored (see --use-goog-cache). delicious cache is
+            used if it's not obsolete, and refreshed if it's out of date.""")
     parser.add_argument('--camelcase', action = 'store_true',
             help = """Use camel case (rather than leaving capitalization
             unchanged) in the tag translation.""")
@@ -66,10 +66,10 @@ def process_args(argv):
     parser.add_argument('--use-goog-cache', action = 'store_true',
             help = """Whether to read from any available local cache of the
             Google posts instead of actually downloading the posts from
-            Google""")
+            Google.  This is useful as a timesaver for development/debugging
+            purposes.""")
     parser.add_argument('--noreplace', action = 'store_true',
             help = """Whether to replace existing entries for same URLs""")
-
     parser.add_argument('--debug', action = 'append', default = [],
             help = """Enable logging for messages of the given flags. Flags
             include: compare (failed comparisons), main (main program
