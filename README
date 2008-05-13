@@ -1,14 +1,81 @@
+% gbookmark2delicious
+% Annop Johnson and Yang Zhang
+
 Overview
 --------
 
-Import your Google Bookmarks into del.icio.us. See the Wiki for more
+Import your Google Bookmarks into del.icio.us. See the [Wiki] for more
 information.
+
+[Wiki]: http://code.google.com/p/gbookmark2delicious/w/list
 
 Setup
 -----
 
-Requirements:
+Requirements (the versions this program has been tested with):
 
+- [Python] 2.5
+- [Python Commons] 0.5
+- [argparse] 0.8.0
+- [feedparser] 4.1
+- [path] 2.2
 - [pydelicious] 0.5.0
 
+[Python]: http://python.org/
+[Python Commons]: http://assorted.sf.net/python-commons/
+[argparse]: http://argparse.python-hosting.com/
+[feedparser]: http://www.feedparser.org/
+[path]: http://www.jorendorff.com/articles/python/path/
 [pydelicious]: http://pydelicious.googlecode.com/
+
+Change Log
+----------
+
+version 2.0
+
+- updated to work with current Google Bookmarks and delicious
+  interfaces/formats
+- more flexibility via beefed-up CLI frontend (more options, etc.)
+- misc features like reading from credentials file
+- added local cache of the remotely pulled data
+- added logging interface
+- fixed character set transcoding issues
+- added incremental synchronization capability for continuous mirroring of
+  Google Bookmarks onto delicious
+- added throttling and persistent retries for delicious' fussy REST API
+
+version 1.0
+
+- initial release
+
+License
+-------
+
+The MIT License
+
+Copyright (c) 2008 Anoop Johnson and Yang Zhang.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+
+Contact
+-------
+
+- [Project Homepage](http://gbookmark2delicious.googlecode.com/)
+- [Annop's Blog](http://anoopjohnson.com/)
+- [Yang's Homepage](http://www.mit.edu/~y_z/)
