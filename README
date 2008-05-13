@@ -1,0 +1,14 @@
+Overview
+--------
+
+Import your Google Bookmarks into del.icio.us. See the Wiki for more
+information.
+
+Setup
+-----
+
+Requirements:
+
+- [pydelicious] 0.5.0
+
+[pydelicious]: http://pydelicious.googlecode.com/
