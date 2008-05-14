@@ -17,7 +17,7 @@ Keywords: Python,utility,utilities,library,libraries,async,asynchronous,
           IO,networking,network,socket,sockets,I/O,threading,threads,
           thread
 Platform: any
-Classifier: Development Status :: 5 - Stable
+Classifier: Development Status :: 5 - Production/Stable
 Classifier: Environment :: Console
 Classifier: Intended Audience :: End Users/Desktop
 Classifier: License :: OSI Approved :: MIT License
