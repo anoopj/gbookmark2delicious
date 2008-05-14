@@ -6,8 +6,8 @@ pkg_info_text = """
 Metadata-Version: 1.1
 Name: gbookmark2delicious
 Version: 2.0
-Author: Yang Zhang
-Author-email: yaaang NOSPAM at REMOVECAPS gmail
+Author: Anoop Johnson and Yang Zhang
+Author-email: anoop.johnson@gmail.com, yaaang NOSPAM at REMOVECAPS gmail
 Home-page: http://gbookmark2delicious.googlecode.com/
 Download-url: http://code.google.com/p/gbookmark2delicious/downloads/list
 Summary: Google Bookmarks to Delicious
@@ -26,4 +26,7 @@ Classifier: Programming Language :: Python
 Classifier: Topic :: Internet :: WWW/HTTP
 """
 
-setup.run_setup( pkg_info_text, srcdir = 'source', scripts = ['source/gbookmark2delicious.py'] )
+setup.run_setup(
+  pkg_info_text,
+  srcdir = 'source',
+  scripts = ['source/gbookmark2delicious.py'] )
