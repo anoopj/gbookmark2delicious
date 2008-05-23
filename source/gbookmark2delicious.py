@@ -195,8 +195,7 @@ def get_dlcs():
 
 def lookup(elt, field):
     child = elt.find(field)
-    return '' if child is None else ucode(child.text.strip())
-    # XXX return '' if child is None else child.text.encode('utf-8').strip()
+    return '' if child is None else cp1252_to_unicode(child.text.strip())
 
 def fields_equal(label, g, d, extracond = False):
     """
