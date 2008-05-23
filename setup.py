@@ -5,7 +5,7 @@ from commons import setup
 pkg_info_text = """
 Metadata-Version: 1.1
 Name: gbookmark2delicious
-Version: 2.0
+Version: 2.1
 Author: Anoop Johnson and Yang Zhang
 Author-email: anoop.johnson@gmail.com, yaaang NOSPAM at REMOVECAPS gmail
 Home-page: http://gbookmark2delicious.googlecode.com/
