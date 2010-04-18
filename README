@@ -1,39 +1,45 @@
 % gbookmark2delicious
-% Anoop Johnson and Yang Zhang
+% Yang Zhang and Anoop Johnson
 
 Overview
---------
+========
 
-Import your Google Bookmarks into del.icio.us. See the [Wiki] for more
-information.
-
-[Wiki]: http://code.google.com/p/gbookmark2delicious/w/list
+Synchronize your Delicious bookmarks against your Google Bookmarks.  By
+default, this script will read the credentials file for your logins, fetch all
+Google bookmarks, determine if anything changed since the last successful sync,
+and perform the necessary adds/removes/updates to delicious.
 
 Setup
------
+=====
 
 Requirements (the versions this program has been tested with):
 
-- [Python] 2.5
-- [Python Commons] 0.5
-- [argparse] 0.8.0
-- [feedparser] 4.1
-- [path] 2.2
+- [Python] 2.6
+- [Python Commons] 0.7
 - [pydelicious] 0.5.0
+- [mechanize] 0.1.11
+- [Beautiful Soup] 3.1.0.1
 
 [Python]: http://python.org/
 [Python Commons]: http://assorted.sf.net/python-commons/
-[argparse]: http://argparse.python-hosting.com/
-[feedparser]: http://www.feedparser.org/
-[path]: http://www.jorendorff.com/articles/python/path/
 [pydelicious]: http://pydelicious.googlecode.com/
+[mechanize]: http://wwwsearch.sourceforge.net/mechanize/
+[Beautiful Soup]: http://www.crummy.com/software/BeautifulSoup/
 
 Change Log
-----------
+==========
+
+version 3.0
+
+- complete rewrite
+- updated for new Google Bookmarks interface (this broke 2.x)
+- thoroughly tested to catch encoding quirks and improve "semantic diff"
+- side-stepping API and using mass export/import mechanisms for performance and
+  reliability; no longer using feed parsing
 
 version 2.1
 
-- fixed a stupid typo
+- fixed minor typo
 
 version 2.0
 
@@ -53,11 +59,11 @@ version 1.0
 - initial release
 
 License
--------
+=======
 
 The MIT License
 
-Copyright (c) 2008 Anoop Johnson and Yang Zhang.
+Copyright (c) 2008--2010 Yang Zhang and Anoop Johnson.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -78,8 +84,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
 Contact
--------
+=======
 
 - [Project Homepage](http://gbookmark2delicious.googlecode.com/)
-- [Anoop's Blog](http://anoopjohnson.com/)
-- [Yang's Homepage](http://www.mit.edu/~y_z/)
+- [Yang's Homepage](http://yz.mit.edu/)
+- [Annop's Blog](http://anoopjohnson.com/)

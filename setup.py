@@ -5,17 +5,15 @@ from commons import setup
 pkg_info_text = """
 Metadata-Version: 1.1
 Name: gbookmark2delicious
-Version: 2.1
-Author: Anoop Johnson and Yang Zhang
-Author-email: anoop.johnson@gmail.com, yaaang NOSPAM at REMOVECAPS gmail
+Version: 3.0
+Author: Yang Zhang and Anoop Johnson
+Author-email: yaaang NOSPAM at REMOVECAPS gmail, anoop.johnson@gmail.com
 Home-page: http://gbookmark2delicious.googlecode.com/
 Download-url: http://code.google.com/p/gbookmark2delicious/downloads/list
-Summary: Google Bookmarks to Delicious
+Summary: Synchronize your Delicious bookmarks against your Google Bookmarks.
 License: MIT License
 Description: Import your Google Bookmarks into del.icio.us.
-Keywords: Python,utility,utilities,library,libraries,async,asynchronous,
-          IO,networking,network,socket,sockets,I/O,threading,threads,
-          thread
+Keywords: Google,Delicious,bookmarks,synchronization,synchronize,synchronizer
 Platform: any
 Classifier: Development Status :: 5 - Production/Stable
 Classifier: Environment :: Console
