@@ -26,5 +26,5 @@ Classifier: Topic :: Internet :: WWW/HTTP
 
 setup.run_setup(
   pkg_info_text,
-  srcdir = 'source',
-  scripts = ['source/gbookmark2delicious.py'] )
+  srcdir = 'src',
+  scripts = ['src/gbookmark2delicious.py'] )
