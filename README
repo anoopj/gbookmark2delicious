@@ -29,7 +29,7 @@ Requirements (the versions this program has been tested with):
 Change Log
 ==========
 
-version 3.0
+version 3.0, released 2010-04-17
 
 - complete rewrite
 - updated for new Google Bookmarks interface (this broke 2.x)
@@ -37,11 +37,11 @@ version 3.0
 - side-stepping API and using mass export/import mechanisms for performance and
   reliability; no longer using feed parsing
 
-version 2.1
+version 2.1, released 2008-05-23
 
 - fixed minor typo
 
-version 2.0
+version 2.0, released 2008-05-14
 
 - updated to work with current Google Bookmarks and delicious
   interfaces/formats
