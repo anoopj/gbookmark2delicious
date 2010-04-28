@@ -7,7 +7,21 @@ Overview
 Synchronize your Delicious bookmarks against your Google Bookmarks.  By
 default, this script will read the credentials file for your logins, fetch all
 Google bookmarks, determine if anything changed since the last successful sync,
-and perform the necessary adds/removes/updates to delicious.
+and perform the necessary adds/removes/updates to Delicious. The program only
+touches Delicious if there are pending changes, otherwise relying solely on its
+cache of Delicious (stored in `~/.gbookmark2delicious.cache`).
+
+What about Lists in Google Bookmarks?
+-------------------------------------
+
+Not too long ago, Google Bookmarks introduced [Lists], which got me excited
+because I thought they were a way to publish bookmark feeds, which would allow
+me to retire gbookmark2delicious. It turned out to be pretty different---Lists
+generate a feed for any updates to the pages in the List. (Plus, adding new
+bookmarks requires that it be explicitly added to the List, and the bookmarklet
+for doing so is IMO less usable than the regular Google Bookmarks bookmarklet.)
+
+[Lists]: http://googleblog.blogspot.com/2010/03/collaborative-bookmarking-with-lists.html
 
 Setup
 =====
@@ -26,8 +40,50 @@ Requirements (the versions this program has been tested with):
 [mechanize]: http://wwwsearch.sourceforge.net/mechanize/
 [Beautiful Soup]: http://www.crummy.com/software/BeautifulSoup/
 
+Usage
+=====
+
+First, create a `~/.gbookmark2delicious.auth` with four lines:
+
+  your.google.username@gmail.com
+  your.google.password
+  your_delicious_username
+  your_delicious_password
+
+Now you're ready to run gbookmark2delicious!
+
+  $ gbookmark2delicious
+  /usr/local/lib/python2.6/site-packages/pydelicious.py:90: DeprecationWarning: the md5 module is deprecated; use hashlib instead
+  import md5, httplib
+  2010-04-28 02:28:13,453 INFO     main                : getting google bookmarks
+  2010-04-28 02:28:13,499 INFO     main                : authenticating with google
+  2010-04-28 02:28:14,706 INFO     main                : google authenticated, got all bookmarks
+  2010-04-28 02:28:14,714 INFO     main                : parsing google bookmarks
+  2010-04-28 02:28:17,646 INFO     main                : building google bookmarks into data structure
+  2010-04-28 02:28:20,099 INFO     main                : getting all delicious bookmarks
+  2010-04-28 02:28:20,721 INFO     main                : authenticating with delicious
+  2010-04-28 02:28:21,587 INFO     main                : delicious authenticated
+  2010-04-28 02:28:24,780 INFO     main                : got all delicious bookmarks
+  2010-04-28 02:28:31,158 INFO     main                : parsing delicious bookmarks
+  2010-04-28 02:28:33,046 INFO     main                : building delicious bookmarks data structure
+  2010-04-28 02:28:35,475 INFO     main                : add 5 rem 1 upd 0
+  2010-04-28 02:28:35,476 INFO     main                : generating file to import into delicious
+  2010-04-28 02:28:35,477 INFO     main                : producing page for delicious to import
+  2010-04-28 02:28:35,478 INFO     main                : importing bookmarks to delicious
+  2010-04-28 02:28:36,308 INFO     main                : successfully imported to delicious
+
+You may want to have this run regularly from a cron job.  I have the following
+entry in my crontab to make gbookmark2delicious run every hour, a quarter past
+the hour:
+
+  15 *  *   *   *     gbookmark2delicious
+
 Change Log
 ==========
+
+version 3.1, released XXX
+
+- better documentation
 
 version 3.0, released 2010-04-17
 
