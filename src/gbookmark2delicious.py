@@ -213,7 +213,7 @@ def dlcs_open(b, config, url, expected):
     b.set_value(config.dlcs_user, 'username')
     b.set_value(config.dlcs_pass, 'password')
     resp = b.submit()
-    html = resp.read()
+    html = resp.read().decode('utf8')
     if expected not in html:
       raise Exception('delicious authentication failed')
     info('delicious authenticated')
