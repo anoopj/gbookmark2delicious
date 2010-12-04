@@ -18,21 +18,16 @@ import pydelicious
 import re
 import sys
 import time
-from commons import files, log, networking, strs, structs
-from commons.path import path
 from functools import partial
 
-info      = partial(log.info,      'main')
-debug     = partial(log.debug,     'main')
-error     = partial(log.error,     'main')
-die       = partial(log.die,       'main')
-exception = partial(log.exception, 'main')
+import commons
+from commons import files, networking, strs, structs
+from commons.path import path
 
 spaces = re.compile(' {2,}')
 ws = re.compile(r'\s')
 wss = re.compile(r'\s{2,}')
-
-def is_debug(): return logging.getLogger('main').isEnabledFor(logging.DEBUG)
+log = logging.getLogger(__name__)
 
 def squeeze(s): return wss.sub(' ', s)
 
@@ -75,9 +70,8 @@ def process_args(argv):
       help = squeeze("""Whether to read from any available local cache of the
       Google posts instead of actually downloading the posts from Google.  This
       is useful as a timesaver for development/debugging purposes."""))
-  parser.add_option('--debug', action = 'append', default = [],
-      help = squeeze("""Enable logging for messages of the given flags. Flags
-      include: compare (failed comparisons), main (main program logic)"""))
+  parser.add_option('--debug', action = 'store_true',
+      help = squeeze("""Enable debug logging."""))
 
   return parser.parse_args(argv[1:])
 
@@ -95,16 +89,15 @@ def setup_config(options):
   config.to_dlcs_path = config.cache_dir / 'to-dlcs.html'
   config.snapshot_path = config.cache_dir / 'snapshot.pickle'
 
-  log.config_logging(level = logging.INFO,
-                     do_console = True,
-                     flags = config.debug)
+  commons.log.config_logging(level = logging.INFO,
+                             do_console = True,
+                             flags = log.name)
 
-  if is_debug():
-    debug('config:')
+  if log.isEnabledFor(logging.DEBUG):
     to_show = copy.copy(config)
     del to_show.goog_pass
     del to_show.dlcs_pass
-    debug(to_show)
+    log.debug('config: %s', to_show)
 
   return config
 
@@ -146,8 +139,8 @@ def is_trunc(a, b, dots):
 class bkmk(structs.free_struct): pass
 
 def fetch_goog(config):
-  info('getting google bookmarks')
-  info('authenticating with google')
+  log.info('getting google bookmarks')
+  log.info('authenticating with google')
   b = create_browser()
   b.open('https://www.google.com/bookmarks/bookmarks.html')
   b.select_form(nr = 0)
@@ -157,14 +150,14 @@ def fetch_goog(config):
   html = resp.read()
   if b'<!DOCTYPE NETSCAPE-Bookmark-file-1>' not in html:
       raise Exception('google authentication failed')
-  info('google authenticated, got all bookmarks')
+  log.info('google authenticated, got all bookmarks')
   # write the raw bytes
   with open(config.goog_path, 'w') as f: f.write(html)
 
 def try_unicode(s): return '' if unicode(s) == 'None' else unicode(s)
 
 def parse_goog(config):
-  info('parsing google bookmarks')
+  log.info('parsing google bookmarks')
   # read in as unicode
   with codecs.open(config.goog_path, encoding = 'utf-8') as f:
     bs = BeautifulSoup.BeautifulSoup(f)
@@ -184,7 +177,7 @@ def parse_goog(config):
   # multiple times. Convert this into a set of bookmarks, each of which has a
   # set of labels.
 
-  info('building google bookmarks into data structure')
+  log.info('building google bookmarks into data structure')
   gurl2bkmk = {}
   for group in bs.dl.findAll('dt', recursive = False):
     label = ws.sub('_', strs.html2unicode(group.h3.string))
@@ -207,7 +200,7 @@ def dlcs_open(b, config, url, expected):
   resp = b.open(url)
   html = resp.read()
   if expected not in html:
-    info('authenticating with delicious')
+    log.info('authenticating with delicious')
     b.select_form('login-form')
     b.set_value(config.dlcs_user, 'username')
     b.set_value(config.dlcs_pass, 'password')
@@ -215,11 +208,11 @@ def dlcs_open(b, config, url, expected):
     html = resp.read().decode('utf8')
     if expected not in html:
       raise Exception('delicious authentication failed')
-    info('delicious authenticated')
+    log.info('delicious authenticated')
   return html
 
 def fetch_dlcs(b, config):
-  info('getting all delicious bookmarks')
+  log.info('getting all delicious bookmarks')
   dlcs_open(b, config,
             'https://secure.delicious.com/settings/bookmarks/export',
             'Export / Download Your Delicious Bookmarks')
@@ -227,16 +220,16 @@ def fetch_dlcs(b, config):
   # leave all fields as default
   resp = b.submit()
 
-  info('got all delicious bookmarks')
+  log.info('got all delicious bookmarks')
   # write raw bytes
   with open(config.dlcs_path, 'w') as f: f.write(resp.read())
 
 def parse_dlcs(config):
-  info('parsing delicious bookmarks')
+  log.info('parsing delicious bookmarks')
   with codecs.open(config.dlcs_path, encoding = 'utf-8') as f:
     bs = BeautifulSoup.BeautifulSoup(f)
 
-  info('building delicious bookmarks data structure')
+  log.info('building delicious bookmarks data structure')
   durl2bkmk = {}
   for dt in bs.findAll('dt'):
     # extract information
@@ -286,20 +279,20 @@ def compare(gurl2bkmk, durl2bkmk):
   to_add = gurls - durls
   to_rem = durls - gurls
   to_upd = [url for url in durls.intersection(gurls) if diff(url)]
-  info('add', len(to_add), 'rem', len(to_rem), 'upd', len(to_upd))
+  log.info('add %d rem %d upd %', len(to_add), len(to_rem), len(to_upd))
 
   # "puts" are adds/updates and are done via import.
   puts = [(url, gurl2bkmk[url]) for url in itertools.chain(to_add, to_upd)]
 
-  if is_debug():
-    if len(to_add) > 0: debug('to add:')
-    for url in to_add: debug(dict(url = url) + gurl2bkmk[url])
-    if len(to_rem) > 0: debug('to remove:')
-    for url in to_rem: debug(dict(url = url) + durl2bkmk[url])
-    if len(to_upd) > 0: debug('to update:')
+  if log.isEnabledFor(logging.DEBUG):
+    for url in to_add:
+      log.debug('to add: %s', dict(url = url) + gurl2bkmk[url])
+    for url in to_rem:
+      log.debug('to remove: %s', dict(url = url) + durl2bkmk[url])
     for url in to_upd:
-      debug(bkmk(url = url) + gurl2bkmk[url])
-      debug(bkmk(url = url) + durl2bkmk[url])
+      log.debug('to update: %s on goog, %s on dlcs',
+          bkmk(url = url) + gurl2bkmk[url],
+          bkmk(url = url) + durl2bkmk[url])
 
   return to_add, to_rem, to_upd, puts
 
@@ -315,7 +308,7 @@ def mk_import(to_dlcs_path, puts):
   # import Google Bookmarks' format into Delicious, only the first header/tag
   # for each bookmark will be applied, and later ones are discarded.
 
-  info('generating file to import into delicious')
+  log.info('generating file to import into delicious')
   hdr = '''<!DOCTYPE NETSCAPE-Bookmark-file-1>
 <META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">
 <!-- This is an automatically generated file.
@@ -324,7 +317,7 @@ Do Not Edit! -->
 <TITLE>Bookmarks</TITLE>
 <DL><p>'''
   ftr = '''</DL><p>'''
-  info('producing page for delicious to import')
+  log.info('producing page for delicious to import')
   with codecs.open(to_dlcs_path, 'w', 'utf-8') as f:
     print(hdr, file = f)
     for url, g in puts:
@@ -335,12 +328,12 @@ Do Not Edit! -->
               file = f)
         if g.desc is not None: print('<DD>' + g.desc, file = f)
       except:
-        exception('problem writing', g + bkmk(url = url))
+        log.exception('problem writing %s', g + bkmk(url = url))
         raise
     print(ftr, file = f)
 
 def do_import(b, config):
-  info('importing bookmarks to delicious')
+  log.info('importing bookmarks to delicious')
   dlcs_open(b, config,
             'https://secure.delicious.com/settings/bookmarks/import',
             'Import Your Bookmarks on Delicious')
@@ -353,7 +346,7 @@ def do_import(b, config):
   html = resp.read().decode('utf-8')
   if 'Success. Your bookmark import has begun.' not in html:
     raise Exception('could not import bookmarks to delicious, instead got: ' + html)
-  info('successfully imported to delicious')
+  log.info('successfully imported to delicious')
 
 def read_snapshot(config):
   # a snapshot is just a serialization of the last successfully synced
@@ -389,7 +382,8 @@ def main(argv = sys.argv):
       fetch_dlcs(b, config)
     durl2bkmk = parse_dlcs(config)
   else:
-    info('using sync snapshot from', datetime.datetime.fromtimestamp(timestamp))
+    log.info('using sync snapshot from %s',
+             datetime.datetime.fromtimestamp(timestamp))
 
   # compare the two to get diff-sets
   to_add, to_rem, to_upd, puts = compare(gurl2bkmk, durl2bkmk)
