@@ -1,30 +1,37 @@
 #!/usr/bin/env python
 
-from commons import setup
+from setuptools import setup, find_packages
 
-pkg_info_text = """
-Metadata-Version: 1.1
-Name: gbookmark2delicious
-Version: 3.0
-Author: Yang Zhang and Anoop Johnson
-Author-email: yaaang NOSPAM at REMOVECAPS gmail, anoop.johnson@gmail.com
-Home-page: http://gbookmark2delicious.googlecode.com/
-Download-url: http://code.google.com/p/gbookmark2delicious/downloads/list
-Summary: Synchronize your Delicious bookmarks against your Google Bookmarks.
-License: MIT License
-Description: Import your Google Bookmarks into del.icio.us.
-Keywords: Google,Delicious,bookmarks,synchronization,synchronize,synchronizer
-Platform: any
-Classifier: Development Status :: 5 - Production/Stable
-Classifier: Environment :: Console
-Classifier: Intended Audience :: End Users/Desktop
-Classifier: License :: OSI Approved :: MIT License
-Classifier: Operating System :: OS Independent
-Classifier: Programming Language :: Python
-Classifier: Topic :: Internet :: WWW/HTTP
-"""
-
-setup.run_setup(
-  pkg_info_text,
-  srcdir = 'src',
-  scripts = ['src/gbookmark2delicious.py'] )
+setup(
+  name = 'gbookmark2delicious',
+  version = '3.1',
+  packages = find_packages(),
+  install_requires =
+    '''
+    beautifulsoup>=3.1.0.11
+    python-commons==0.7
+    distribute
+    mechanize>=0.1.11
+    pydelicious>=0.5.0
+    '''.split(),
+  entry_points = {
+    'console_scripts': 'gbookmark2delicious = gbookmark2delicious:main'
+  },
+  # extra metadata for pypi
+  author = 'Yang Zhang and Anoop Johnson',
+  author_email = 'yaaang NOSPAM at REMOVECAPS gmail',
+  url = 'http://gbookmark2delicious.googlecode.com/',
+  description = 'Synchronize/share your Google Bookmarks to delicious.com',
+  license = 'MIT',
+  keywords =
+    'google delicious bookmarks synchronization synchronize synchronizer',
+  classifiers = [
+    'Development Status :: 5 - Production/Stable',
+    'Environment :: Console',
+    'Intended Audience :: End Users/Desktop',
+    'License :: OSI Approved :: MIT License',
+    'Operating System :: OS Independent',
+    'Programming Language :: Python',
+    'Topic :: Internet :: WWW/HTTP',
+  ],
+)

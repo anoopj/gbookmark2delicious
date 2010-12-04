@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 """Synchronize your Delicious bookmarks against your Google Bookmarks.  By
 default, this script will read the credentials file for your logins, fetch all
 Google bookmarks, determine if anything changed since the last successful sync,
@@ -18,8 +16,9 @@ import mechanize
 import optparse
 import pydelicious
 import re
+import sys
 import time
-from commons import files, log, networking, startup, strs, structs
+from commons import files, log, networking, strs, structs
 from commons.path import path
 from functools import partial
 
@@ -369,7 +368,7 @@ def write_snapshot(gurl2bkmk, config):
   with open(config.snapshot_path, 'w') as f:
     pickle.dump((time.time(), gurl2bkmk), f, protocol = 2)
 
-def main(argv):
+def main(argv = sys.argv):
   # preliminaries
   options, args = process_args(argv)
   config = setup_config(options)
@@ -412,7 +411,5 @@ def main(argv):
   # update the snapshot; ops are idempotent so it's fine to write this
   # afterward (risking redo's if ops previously failed before this snapshot)
   write_snapshot(gurl2bkmk, config)
-
-startup.run_main()
 
 # vim:et:sw=2:ts=2
