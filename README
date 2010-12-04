@@ -23,23 +23,6 @@ for doing so is IMO less usable than the regular Google Bookmarks bookmarklet.)
 
 [Lists]: http://googleblog.blogspot.com/2010/03/collaborative-bookmarking-with-lists.html
 
-Setup
-=====
-
-Requirements (the versions this program has been tested with):
-
-- [Python] 2.6
-- [Python Commons] 0.7
-- [pydelicious] 0.5.0
-- [mechanize] 0.1.11
-- [Beautiful Soup] 3.1.0.1
-
-[Python]: http://python.org/
-[Python Commons]: http://assorted.sf.net/python-commons/
-[pydelicious]: http://pydelicious.googlecode.com/
-[mechanize]: http://wwwsearch.sourceforge.net/mechanize/
-[Beautiful Soup]: http://www.crummy.com/software/BeautifulSoup/
-
 Usage
 =====
 
@@ -81,9 +64,15 @@ the hour:
 Change Log
 ==========
 
-version 3.1, released XXX
+version 3.1.1, released 2010-12-03
+
+- documentation tweaks
+
+version 3.1, released 2010-12-03
 
 - better documentation
+- proper `distribute`-style packaging
+- cleaned up logging
 
 version 3.0, released 2010-04-17
 
