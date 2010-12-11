@@ -64,6 +64,10 @@ the hour:
 Change Log
 ==========
 
+version 3.1.2, released 2010-12-10
+
+- fixed import bug
+
 version 3.1.1, released 2010-12-03
 
 - documentation tweaks
