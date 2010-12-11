@@ -20,7 +20,7 @@ import sys
 import time
 from functools import partial
 
-import commons
+import commons.log
 from commons import files, networking, strs, structs
 from commons.path import path
 
