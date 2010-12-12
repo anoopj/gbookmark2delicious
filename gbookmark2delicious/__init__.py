@@ -113,9 +113,19 @@ def create_browser():
   return b
 
 def dlcs_retry(func):
+  # pydelicious 0.6's API calls may return None (this was changed from 0.5).
+  # retry_exp_backoff treats None as the sign to retry, so we return True on
+  # success.
   def helper():
-    try: return func()
-    except pydelicious.PyDeliciousException: return None
+    try:
+      res = func()
+    except pydelicious.PyDeliciousException:
+      log.exception('got an exception from delicious API')
+      return None
+    else:
+      if res is not None:
+        raise Exception('expecting pydelicious to return None, got %r', res)
+      return True
   return networking.retry_exp_backoff(300, 5, helper)
 
 def tidy(s):
