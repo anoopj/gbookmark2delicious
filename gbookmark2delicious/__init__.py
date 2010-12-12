@@ -89,9 +89,9 @@ def setup_config(options):
   config.to_dlcs_path = config.cache_dir / 'to-dlcs.html'
   config.snapshot_path = config.cache_dir / 'snapshot.pickle'
 
-  commons.log.config_logging(level = logging.INFO,
-                             do_console = True,
-                             flags = log.name)
+  commons.log.config_logging(
+      level = logging.DEBUG if config.debug else logging.INFO,
+      do_console = True)
 
   if log.isEnabledFor(logging.DEBUG):
     to_show = copy.copy(config)
