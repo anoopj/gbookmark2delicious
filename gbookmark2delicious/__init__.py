@@ -208,7 +208,7 @@ def parse_goog(config):
 
 def dlcs_open(b, config, url, expected):
   resp = b.open(url)
-  html = resp.read()
+  html = resp.read().decode('utf8')
   if expected not in html:
     log.info('authenticating with delicious')
     b.select_form('login-form')
