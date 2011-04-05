@@ -365,7 +365,7 @@ def read_snapshot(config):
     with open(config.snapshot_path) as f:
       return pickle.load(f)
   except:
-    return 0, {}
+    return None, None
 
 def write_snapshot(gurl2bkmk, config):
   with open(config.snapshot_path, 'w') as f:
@@ -385,7 +385,7 @@ def main(argv = sys.argv):
   # get delicious bookmarks
   b = create_browser()
   timestamp, durl2bkmk = read_snapshot(config)
-  if config.ignore_snapshot or durl2bkmk == {}:
+  if config.ignore_snapshot or durl2bkmk is None:
     # get delicious bookmarks; this by default only happens the first time or
     # upon force-request
     if config.force_dlcs or not config.dlcs_path.exists():
