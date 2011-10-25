@@ -159,7 +159,8 @@ def fetch_goog(config):
   resp = b.submit()
   html = resp.read()
   if b'<!DOCTYPE NETSCAPE-Bookmark-file-1>' not in html:
-      raise Exception('google authentication failed')
+    print(html)
+    raise Exception('google authentication failed')
   log.info('google authenticated, got all bookmarks')
   # write the raw bytes
   with open(config.goog_path, 'w') as f: f.write(html)
@@ -207,18 +208,20 @@ def parse_goog(config):
   return gurl2bkmk
 
 def dlcs_open(b, config, url, expected):
-  resp = b.open(url)
-  html = resp.read().decode('utf8')
+  html = b.open(url).read().decode('utf8')
   if expected not in html:
+    log.debug(html)
     log.info('authenticating with delicious')
-    b.select_form('login-form')
+    b.open('http://secure.delicious.com/login')
+    b.select_form(nr = 1)
     b.set_value(config.dlcs_user, 'username')
     b.set_value(config.dlcs_pass, 'password')
-    resp = b.submit()
-    html = resp.read().decode('utf8')
-    if expected not in html:
+    html = b.submit().read().decode('utf8')
+    if '<a href="/logout">logout</a>' not in html:
+      log.debug(html)
       raise Exception('delicious authentication failed')
     log.info('delicious authenticated')
+    html = b.open(url).read().decode('utf8')
   return html
 
 def fetch_dlcs(b, config):
@@ -226,7 +229,7 @@ def fetch_dlcs(b, config):
   dlcs_open(b, config,
             'https://secure.delicious.com/settings/bookmarks/export',
             'Export / Download Your Delicious Bookmarks')
-  b.select_form(nr = 2)
+  b.select_form(nr = 1)
   # leave all fields as default
   resp = b.submit()
 
@@ -348,7 +351,7 @@ def do_import(b, config):
             'https://secure.delicious.com/settings/bookmarks/import',
             'Import Your Bookmarks on Delicious')
   with open(config.to_dlcs_path) as f:
-    b.select_form(nr = 2)
+    b.select_form(nr = 1)
     b.add_file(f, 'text/html', config.to_dlcs_path.basename())
     b.set_value('', 'tags') # don't automatically add any tags
     b.set_value(['no'], 'private') # make bookmarks public
