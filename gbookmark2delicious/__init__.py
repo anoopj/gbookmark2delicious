@@ -212,12 +212,30 @@ def dlcs_open(b, config, url, expected):
   if expected not in html:
     log.debug(html)
     log.info('authenticating with delicious')
-    b.open('http://secure.delicious.com/login')
+    b.open('https://delicious.com/login')
+
+    # Temp workaround for <https://github.com/jjlee/mechanize/issues/54>.
+    r=b.response()
+    c=r._seek_wrapper__cache
+    id(b.forms())
+    c.seek(0)
+    rep = '''
+    <form method="post" action="login" id="login-form">
+    <input type="text" name="username" class="textInput" id="firstInput"/>
+    <input type="password" name="password"class="textInput"/>
+    <input type="submit" style="visibility:hidden;"/>
+    </form>
+    '''
+    c.write(c.read().replace('<hr/>',rep))
+    c.truncate()
+    c.seek(0)
+    b._factory._forms_genf=None
+
     b.select_form(nr = 1)
     b.set_value(config.dlcs_user, 'username')
     b.set_value(config.dlcs_pass, 'password')
     html = b.submit().read().decode('utf8')
-    if '<a href="/logout">logout</a>' not in html:
+    if 'is_logged_in' not in html:
       log.debug(html)
       raise Exception('delicious authentication failed')
     log.info('delicious authenticated')
@@ -227,7 +245,7 @@ def dlcs_open(b, config, url, expected):
 def fetch_dlcs(b, config):
   log.info('getting all delicious bookmarks')
   dlcs_open(b, config,
-            'https://secure.delicious.com/settings/bookmarks/export',
+            'https://export.delicious.com/settings/bookmarks/export',
             'Export / Download Your Delicious Bookmarks')
   b.select_form(nr = 1)
   # leave all fields as default
@@ -348,8 +366,8 @@ Do Not Edit! -->
 def do_import(b, config):
   log.info('importing bookmarks to delicious')
   dlcs_open(b, config,
-            'https://secure.delicious.com/settings/bookmarks/import',
-            'Import Your Bookmarks on Delicious')
+            'https://export.delicious.com/settings/bookmarks/import',
+            'Import Your Bookmarks to Delicious')
   with open(config.to_dlcs_path) as f:
     b.select_form(nr = 1)
     b.add_file(f, 'text/html', config.to_dlcs_path.basename())
@@ -357,7 +375,7 @@ def do_import(b, config):
     b.set_value(['no'], 'private') # make bookmarks public
     resp = b.submit()
   html = resp.read().decode('utf-8')
-  if 'Success. Your bookmark import has begun.' not in html:
+  if 'Success! Your bookmark import has begun.' not in html:
     raise Exception('could not import bookmarks to delicious, instead got: ' + html)
   log.info('successfully imported to delicious')
 
