@@ -4,14 +4,14 @@ from setuptools import setup, find_packages
 
 setup(
   name = 'gbookmark2delicious',
-  version = '3.2',
+  version = '3.3',
   packages = find_packages(),
   install_requires =
     '''
     beautifulsoup>=3.1.0.11
     python-commons==0.7
     distribute
-    mechanize>=0.1.11
+    mechanize>=0.2.5
     pydelicious>=0.5.0
     '''.split(),
   entry_points = {
