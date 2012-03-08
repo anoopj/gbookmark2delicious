@@ -64,6 +64,10 @@ the hour:
 Change Log
 ==========
 
+version 3.3.1, released 2012-03-08
+
+- fixed Unicode bug
+
 version 3.3, released 2012-01-18
 
 - updated to new UI

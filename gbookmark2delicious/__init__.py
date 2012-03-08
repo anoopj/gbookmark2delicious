@@ -226,7 +226,7 @@ def dlcs_open(b, config, url, expected):
     <input type="submit" style="visibility:hidden;"/>
     </form>
     '''
-    c.write(c.read().replace('<hr/>',rep))
+    c.write(c.read().decode('utf8').replace('<hr/>',rep).encode('utf8'))
     c.truncate()
     c.seek(0)
     b._factory._forms_genf=None
