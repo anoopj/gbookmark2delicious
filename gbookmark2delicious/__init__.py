@@ -219,14 +219,7 @@ def dlcs_open(b, config, url, expected):
     c=r._seek_wrapper__cache
     id(b.forms())
     c.seek(0)
-    rep = '''
-    <form method="post" action="login" id="login-form">
-    <input type="text" name="username" class="textInput" id="firstInput"/>
-    <input type="password" name="password"class="textInput"/>
-    <input type="submit" style="visibility:hidden;"/>
-    </form>
-    '''
-    c.write(c.read().decode('utf8').replace('<hr/>',rep).encode('utf8'))
+    c.write(c.read().decode('utf8').replace('<hr/>','').replace('<br/>','').encode('utf8'))
     c.truncate()
     c.seek(0)
     b._factory._forms_genf=None
@@ -393,48 +386,50 @@ def write_snapshot(gurl2bkmk, config):
     pickle.dump((time.time(), gurl2bkmk), f, protocol = 2)
 
 def main(argv = sys.argv):
-  # preliminaries
-  options, args = process_args(argv)
-  config = setup_config(options)
-  files.soft_makedirs(config.cache_dir)
+  import ipdb
+  with ipdb.launch_ipdb_on_exception():
+    # preliminaries
+    options, args = process_args(argv)
+    config = setup_config(options)
+    files.soft_makedirs(config.cache_dir)
 
-  # get google bookmarks
-  if not (config.use_goog_cache and config.goog_path.exists()):
-    fetch_goog(config)
-  gurl2bkmk = parse_goog(config)
+    # get google bookmarks
+    if not (config.use_goog_cache and config.goog_path.exists()):
+      fetch_goog(config)
+    gurl2bkmk = parse_goog(config)
 
-  # get delicious bookmarks
-  b = create_browser()
-  timestamp, durl2bkmk = read_snapshot(config)
-  if config.ignore_snapshot or durl2bkmk is None:
-    # get delicious bookmarks; this by default only happens the first time or
-    # upon force-request
-    if config.force_dlcs or not config.dlcs_path.exists():
-      fetch_dlcs(b, config)
-    durl2bkmk = parse_dlcs(config)
-  else:
-    log.info('using sync snapshot from %s',
-             datetime.datetime.fromtimestamp(timestamp))
+    # get delicious bookmarks
+    b = create_browser()
+    timestamp, durl2bkmk = read_snapshot(config)
+    if config.ignore_snapshot or durl2bkmk is None:
+      # get delicious bookmarks; this by default only happens the first time or
+      # upon force-request
+      if config.force_dlcs or not config.dlcs_path.exists():
+        fetch_dlcs(b, config)
+      durl2bkmk = parse_dlcs(config)
+    else:
+      log.info('using sync snapshot from %s',
+               datetime.datetime.fromtimestamp(timestamp))
 
-  # compare the two to get diff-sets
-  to_add, to_rem, to_upd, puts = compare(gurl2bkmk, durl2bkmk)
+    # compare the two to get diff-sets
+    to_add, to_rem, to_upd, puts = compare(gurl2bkmk, durl2bkmk)
 
-  # perform any puts into delicious
-  if len(puts) > 0:
-    mk_import(config.to_dlcs_path, puts)
-    if not config.pretend:
-      do_import(b, config)
+    # perform any puts into delicious
+    if len(puts) > 0:
+      mk_import(config.to_dlcs_path, puts)
+      if not config.pretend:
+        do_import(b, config)
 
-  # perform any removes
-  if not config.pretend and not config.no_remove:
-    # Deletes can only be done via the delicious API.
-    dlcs_api = pydelicious.DeliciousAPI(config.dlcs_user, config.dlcs_pass, 'utf-8')
-    for url in to_rem:
-      dlcs_retry(lambda: dlcs_api.posts_delete(url))
-      time.sleep(1)
+    # perform any removes
+    if not config.pretend and not config.no_remove:
+      # Deletes can only be done via the delicious API.
+      dlcs_api = pydelicious.DeliciousAPI(config.dlcs_user, config.dlcs_pass, 'utf-8')
+      for url in to_rem:
+        dlcs_retry(lambda: dlcs_api.posts_delete(url))
+        time.sleep(1)
 
-  # update the snapshot; ops are idempotent so it's fine to write this
-  # afterward (risking redo's if ops previously failed before this snapshot)
-  write_snapshot(gurl2bkmk, config)
+    # update the snapshot; ops are idempotent so it's fine to write this
+    # afterward (risking redo's if ops previously failed before this snapshot)
+    write_snapshot(gurl2bkmk, config)
 
 # vim:et:sw=2:ts=2
