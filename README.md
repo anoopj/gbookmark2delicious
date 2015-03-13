@@ -1,8 +1,8 @@
-% gbookmark2delicious
-% Yang Zhang and Anoop Johnson
+# gbookmark2delicious
 
-Overview
-========
+Yang Zhang and Anoop Johnson
+
+# Overview
 
 Synchronize your Delicious bookmarks against your Google Bookmarks.  By
 default, this script will read the credentials file for your logins, fetch all
@@ -11,8 +11,7 @@ and perform the necessary adds/removes/updates to Delicious. The program only
 touches Delicious if there are pending changes, otherwise relying solely on its
 cache of Delicious (stored in `~/.gbookmark2delicious.cache`).
 
-What about Lists in Google Bookmarks?
--------------------------------------
+# What about Lists in Google Bookmarks?
 
 Not too long ago, Google Bookmarks introduced [Lists], which got me excited
 because I thought they were a way to publish bookmark feeds, which would allow
@@ -23,18 +22,20 @@ for doing so is IMO less usable than the regular Google Bookmarks bookmarklet.)
 
 [Lists]: http://googleblog.blogspot.com/2010/03/collaborative-bookmarking-with-lists.html
 
-Usage
-=====
+# Usage
 
 First, create a `~/.gbookmark2delicious.auth` with four lines:
 
+```
   your.google.username@gmail.com
   your.google.password
   your_delicious_username
   your_delicious_password
+```
 
 Now you're ready to run gbookmark2delicious!
 
+```
   $ gbookmark2delicious
   /usr/local/lib/python2.6/site-packages/pydelicious.py:90: DeprecationWarning: the md5 module is deprecated; use hashlib instead
   import md5, httplib
@@ -54,15 +55,16 @@ Now you're ready to run gbookmark2delicious!
   2010-04-28 02:28:35,477 INFO     main                : producing page for delicious to import
   2010-04-28 02:28:35,478 INFO     main                : importing bookmarks to delicious
   2010-04-28 02:28:36,308 INFO     main                : successfully imported to delicious
+```
 
 You may want to have this run regularly from a cron job.  I have the following
 entry in my crontab to make gbookmark2delicious run every hour, a quarter past
 the hour:
 
+```
   15 *  *   *   *     gbookmark2delicious
-
-Change Log
-==========
+```
+# Change Log
 
 version 3.3.1, released 2012-03-08
 
@@ -120,8 +122,7 @@ version 1.0
 
 - initial release
 
-License
-=======
+# License
 
 The MIT License
 
@@ -145,9 +146,8 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
-Contact
-=======
+# Contact
 
-- [Project Homepage](http://gbookmark2delicious.googlecode.com/)
-- [Yang's Homepage](http://yz.mit.edu/)
-- [Annop's Blog](http://anoopjohnson.com/)
+* [Project Homepage](https://github.com/anoopj/gbookmark2delicious)
+* [Yang's Homepage](http://yz.mit.edu/)
+* [Anoop's Homepage](http://anoopjohnson.com/)
