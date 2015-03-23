@@ -1,7 +1,3 @@
-# gbookmark2delicious
-
-Yang Zhang and Anoop Johnson
-
 # Overview
 
 Synchronize your Delicious bookmarks against your Google Bookmarks.  By
